@@ -1,0 +1,3 @@
+-r requirements.txt
+pytest
+garmin-fit-sdk  # tests : relit les fichiers FIT avec le lecteur officiel de Garmin

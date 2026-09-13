@@ -1,0 +1,2 @@
+# Qt 6.10 au moins : tracés qui se dessinent (ShapePath.trim). Les modules de base suffisent (plus léger sur le Pi).
+pyside6-essentials>=6.10

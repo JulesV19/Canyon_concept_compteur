@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canyon compteur · miroir</title>
+<style>
+  @font-face { font-family: Barlow; src: url("/polices/Barlow-Medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Barlow; src: url("/polices/Barlow-SemiBold.ttf"); font-weight: 600; }
+  :root {
+    --graphite: #151618; --carbon: #202225; --raised: #2B2D31;
+    --ash: #A9ACAA; --lacquer: #EDEEEC; --hairline: rgba(255, 255, 255, 0.12); --ok: #3CCB7F;
+    color-scheme: dark;
+  }
+  html, body { margin: 0; height: 100%; background: var(--graphite); color: var(--ash);
+               font: 500 14px/1.45 Barlow, system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+         padding-block: 16px; padding-inline: 16px; box-sizing: border-box; }
+  header { display: flex; align-items: baseline; gap: 12px; }
+  h1 { margin: 0; color: var(--lacquer); font-size: 17px; font-weight: 600; letter-spacing: 0.02em; }
+  #etat { font-size: 13px; }
+  #etat::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%;
+                  background: var(--ash); }
+  #etat.en-direct::before { background: var(--ok); }
+  /* L'écran garde ses proportions : il tient dans la fenêtre en hauteur comme en largeur */
+  #ecran { display: block; aspect-ratio: {{largeur}} / {{hauteur}};
+           height: min(calc(100vh - 124px), 1280px, calc((100vw - 32px) * {{hauteur}} / {{largeur}}));
+           background: var(--carbon); border-radius: 18px;
+           box-shadow: 0 0 0 1px var(--hairline), 0 24px 70px rgba(0, 0, 0, 0.55);
+           touch-action: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; cursor: pointer; }
+  p { margin: 0; text-align: center; }
+  kbd { font: inherit; color: var(--lacquer); background: var(--raised); border-radius: 4px; padding: 1px 6px; }
+</style>
+</head>
+<body>
+<header><h1>Canyon compteur</h1><span id="etat">connexion…</span></header>
+<img id="ecran" src="/ecran" alt="Écran du compteur" draggable="false">
+<p>Clic : toucher · glisser : balayer · maintenir : appui long<br>
+  <kbd>Espace</kbd> départ ou pause · <kbd>←</kbd> <kbd>→</kbd> pages · <kbd>L</kbd> tour · <kbd>E</kbd> terminer ·
+  <kbd>M</kbd> menu · <kbd>Échap</kbd> retour</p>
+<script>
+  const W = {{largeur}}, H = {{hauteur}};
+  const screen = document.getElementById("ecran");
+  const state = document.getElementById("etat");
+  let queue = [], sending = false, pressed = false;
+
+  // Position dans l'écran du compteur, en points
+  function at(e) {
+    const r = screen.getBoundingClientRect();
+    const x = Math.min(W - 1, Math.max(0, (e.clientX - r.left) / r.width * W));
+    const y = Math.min(H - 1, Math.max(0, (e.clientY - r.top) / r.height * H));
+    return Math.round(x) + " " + Math.round(y);
+  }
+
+  // Les événements partent dans l'ordre, un envoi à la fois ; les déplacements en attente se fondent en un seul
+  function send(line) {
+    const last = queue[queue.length - 1];
+    if (line.startsWith("move") && last && last.startsWith("move"))
+      queue[queue.length - 1] = line;
+    else
+      queue.push(line);
+    flush();
+  }
+  async function flush() {
+    if (sending || queue.length === 0)
+      return;
+    sending = true;
+    const body = queue.join("\n");
+    queue = [];
+    try {
+      await fetch("/evenements", { method: "POST", body });
+    } catch (error) {
+      // Compteur injoignable : le flux d'images le signale déjà
+    }
+    sending = false;
+    flush();
+  }
+
+  screen.addEventListener("pointerdown", e => {
+    if (e.button !== 0)
+      return;
+    e.preventDefault();
+    screen.setPointerCapture(e.pointerId);
+    pressed = true;
+    send("down " + at(e));
+  });
+  screen.addEventListener("pointermove", e => {
+    if (pressed)
+      send("move " + at(e));
+  });
+  for (const type of ["pointerup", "pointercancel"])
+    screen.addEventListener(type, e => {
+      if (!pressed)
+        return;
+      pressed = false;
+      send("up " + at(e));
+    });
+
+  // Le clavier tient lieu de boutons physiques, comme dans le simulateur
+  const keys = { " ": "Space", Enter: "Enter", Escape: "Escape", Backspace: "Backspace", ArrowLeft: "ArrowLeft",
+                 ArrowRight: "ArrowRight", ArrowUp: "ArrowUp", ArrowDown: "ArrowDown",
+                 l: "L", p: "P", e: "E", m: "M", r: "R" };
+  document.addEventListener("keydown", e => {
+    const key = keys[e.key] ?? keys[e.key.toLowerCase()];
+    if (!key || e.repeat || e.metaKey || e.ctrlKey || e.altKey)
+      return;
+    e.preventDefault();
+    send("key " + key);
+  });
+
+  // Si l'appli redémarre, le flux s'arrête : on s'y reconnecte
+  screen.addEventListener("load", () => {
+    state.textContent = "en direct";
+    state.className = "en-direct";
+  });
+  screen.addEventListener("error", () => {
+    state.textContent = "reconnexion…";
+    state.className = "";
+    setTimeout(() => { screen.src = "/ecran?" + Date.now(); }, 1000);
+  });
+</script>
+</body>
+</html>

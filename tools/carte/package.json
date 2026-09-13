@@ -1,0 +1,15 @@
+{
+  "name": "carte-compteur",
+  "private": true,
+  "description": "Fabrique la carte hors ligne du compteur : tuiles images dessinées avec MapLibre à partir d'OpenStreetMap",
+  "scripts": {
+    "construire": "npx -y -p node@24 node rendu.mjs construire",
+    "apercu": "npx -y -p node@24 node rendu.mjs apercu"
+  },
+  "dependencies": {
+    "@maplibre/maplibre-gl-native": "^6.4.1",
+    "@protomaps/basemaps": "^5.7.2",
+    "pmtiles": "^4.5.0",
+    "sharp": "^0.35.4"
+  }
+}
