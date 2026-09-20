@@ -1,12 +1,18 @@
 import QtQuick
 import QtQuick.Shapes
+import "Format.js" as Format
 
-// Réglages : FC max (et les zones cardio qui en découlent), auto-pause, luminosité de l'écran.
-// Chaque changement est enregistré aussitôt. Au clavier (plus tard aux boutons) : ↑ ↓ pour choisir, ← → pour régler.
+// Réglages : FC max (et les zones cardio qui en découlent), auto-pause, luminosité de l'écran, puis les écrans Batterie
+// et GPS. Chaque changement est enregistré aussitôt. Au clavier (plus tard aux boutons) : ↑ ↓ pour choisir, ← → pour
+// régler (→ ou Entrée ouvre Batterie ou GPS).
 Item {
     id: page
     required property var settings  // SettingsModel
+    required property var battery   // BatteryModel : sa charge, sur la case Batterie
+    required property var gps       // GpsModel : son état, sur la case GPS
     signal back
+    signal batteryRequested
+    signal gpsRequested
 
     readonly property var values: settings.values
     property int focusRow: 0        // ligne choisie au clavier
@@ -14,11 +20,20 @@ Item {
 
     function moveFocus(delta) {
         keyboard = true
-        focusRow = (focusRow + delta + 3) % 3
+        focusRow = (focusRow + delta + 5) % 5
+    }
+    function open(row) {
+        if (row === 3)
+            batteryRequested()
+        else
+            gpsRequested()
     }
     function adjust(delta) {
         keyboard = true
-        if (focusRow === 0)
+        if (focusRow >= 3) {
+            if (delta > 0)
+                open(focusRow)
+        } else if (focusRow === 0)
             settings.set("maxHr", values.maxHr + delta)
         else if (focusRow === 1)
             settings.set("autoPause", delta > 0)
@@ -29,6 +44,8 @@ Item {
         keyboard = true
         if (focusRow === 1)
             settings.set("autoPause", !values.autoPause)
+        else if (focusRow >= 3)
+            open(focusRow)
     }
 
     Rectangle {
@@ -214,6 +231,93 @@ Item {
         color: Theme.ash
         wrapMode: Text.WordWrap
         font { family: Theme.sans; pixelSize: 15; weight: Font.Medium }
+    }
+
+    // Batterie et GPS : chacun ouvre son écran, avec son état du moment en petit
+    Panel {
+        id: sensors
+        x: 16
+        y: parent.height - height - 18
+        width: parent.width - 32
+        height: 84
+
+        Row {
+            anchors.fill: parent
+
+            SensorLink {
+                readonly property var values: page.battery.values
+                row: 3
+                label: "Batterie"
+                hint: values.state === "absente" ? "Jauge absente"
+                    : Format.number(values.percent) + " % · "
+                      + ({ charge: "en charge", pleine: "pleine", decharge: "en décharge" })[values.state]
+            }
+            SensorLink {
+                readonly property var values: page.gps.values
+                row: 4
+                label: "GPS"
+                hint: values.state === "absent" ? "GPS absent" : values.state === "recherche" ? "Recherche"
+                    : values.used + " sat. · " + (values.state === "3d" ? "3D" : "2D")
+            }
+        }
+        SlantRule {
+            x: sensors.width / 2
+            y: 16
+            height: sensors.height - 32
+        }
+    }
+
+    // Une case de Batterie et GPS : libellé, état en dessous, chevron à droite
+    component SensorLink: Item {
+        id: link
+        property int row
+        property string label
+        property string hint
+        width: sensors.width / 2
+        height: sensors.height
+
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.carbonRaised
+            visible: linkTap.pressed
+        }
+        FocusMark { visible: page.keyboard && page.focusRow === link.row }
+        Label {
+            id: linkLabel
+            y: 16
+            text: link.label
+        }
+        Hint {
+            anchors.top: linkLabel.bottom
+            width: link.width - 60
+            elide: Text.ElideRight
+            text: link.hint
+        }
+        Shape {
+            x: link.width - 22 - width
+            anchors.verticalCenter: parent.verticalCenter
+            width: 11
+            height: 20
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                strokeColor: Theme.ash
+                strokeWidth: 2.5
+                fillColor: "transparent"
+                capStyle: ShapePath.RoundCap
+                joinStyle: ShapePath.RoundJoin
+                startX: 1; startY: 1
+                PathLine { x: 10; y: 10 }
+                PathLine { x: 1; y: 19 }
+            }
+        }
+        TapHandler {
+            id: linkTap
+            onTapped: {
+                page.keyboard = false
+                page.focusRow = link.row
+                page.open(link.row)
+            }
+        }
     }
 
     component Label: Text {

@@ -33,6 +33,9 @@ polkit.addRule(function (action, subject) {
 });
 EOF
 
+# Bus I2C des capteurs (jauge, GPS…)
+tools/pi/bus_capteurs.sh
+
 [ -d .venv ] || python3 -m venv .venv
 .venv/bin/pip install --disable-pip-version-check -r requirements.txt
 echo "Prêt : .venv/bin/python -m compteur"

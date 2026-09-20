@@ -7,6 +7,7 @@ from PySide6.QtCore import QPointF
 from compteur.model import RideModel, route_progress, simplified, snapshot
 from compteur.ride import Ride, Sample
 from compteur.route import Point, Position, Route
+from compteur.segments import Best, StarredSegment
 
 
 def test_snapshot_unites_ecran():
@@ -27,6 +28,61 @@ def test_snapshot_unites_ecran():
     assert values["gradePct"] == pytest.approx(1)  # 0,1 m tous les 10 m
     assert values["lap"]["number"] == 2
     assert values["lap"]["avgSpeedKmh"] is None  # tour tout juste commencé
+
+
+def test_segment_en_direct_dans_les_valeurs():
+    points = [Point(48.7 + i * 0.0001, 2.0, 100 + i * 0.5) for i in range(300)]  # vers le nord, 4,5 %
+    route = Route("Route", points)
+    segment = StarredSegment(7, "Côte", Route("Côte", points[100:201]), pr=Best(200.0), kom=Best(150.0))
+    model = RideModel(Ride(), segments=[segment])
+    events = {"approached": [], "started": [], "finished": []}
+    model.segmentApproached.connect(events["approached"].append)
+    model.segmentStarted.connect(events["started"].append)
+    model.segmentFinished.connect(events["finished"].append)
+
+    def ride_to(t_end, t_start):
+        for t in range(t_start, t_end):
+            p = route.point_at(5.0 * t)
+            model.update(Sample(t=t, speed_mps=5.0, heart_rate=140, lat=p.lat, lon=p.lon, altitude_m=p.ele,
+                                heading_deg=0))
+            model.refresh()
+
+    ride_to(1, 0)
+    model.startPause()
+    ride_to(330, 1)  # départ du segment à 1112 m (t ≈ 222 s), mi-segment à t = 330 s
+    assert len(events["approached"]) == 1 and events["approached"][0]["distanceM"] <= 300
+    assert [card["name"] for card in events["started"]] == ["Côte"]
+    live = model.values["segment"]
+    assert live["doneKm"] == pytest.approx(0.54, abs=0.02)
+    assert live["gapS"] == pytest.approx(live["elapsedS"] - 200 * live["progress"], abs=0.01)
+    assert live["gapS"] == pytest.approx(11, abs=1.5)  # plus lent que le record (200 s pour 1112 m)
+    assert live["komLabel"] == "KOM" and live["gradePct"] == pytest.approx(4.5, rel=0.02)
+    assert len(model.segmentProfile) >= 10
+
+    ride_to(500, 330)
+    [result] = events["finished"]
+    assert not result["newRecord"]
+    assert result["elapsedS"] == pytest.approx(222, abs=1) and result["gapS"] == pytest.approx(22, abs=1)
+    assert result["prS"] == 200 and result["avgHeartRate"] == pytest.approx(140)
+    assert "segment" not in model.values
+    assert len(model.segmentProfile) >= 10  # le profil du segment fini reste pour l'écran d'arrivée
+
+
+def test_record_battu_confie_a_garder():
+    points = [Point(48.7 + i * 0.0001, 2.0, 100.0) for i in range(300)]
+    route = Route("Route", points)
+    beaten, kept = [StarredSegment(i, name, Route(name, points[100:201]), pr=Best(pr_s))
+                    for i, name, pr_s in ((1, "Battu", 300.0), (2, "Tenu", 100.0))]
+    model = RideModel(Ride(), segments=[beaten, kept])
+    records = []
+    model.record_beaten = records.append
+    for t in range(500):
+        p = route.point_at(5.0 * t)
+        model.update(Sample(t=t, speed_mps=5.0, lat=p.lat, lon=p.lon, heading_deg=0))
+        if t == 0:
+            model.startPause()
+    assert [result.segment.name for result in records] == ["Battu"]
+    assert records[0].elapsed_s == pytest.approx(222, abs=1) and records[0].splits[-1][1] == records[0].elapsed_s
 
 
 def test_snapshot_sans_mesure():

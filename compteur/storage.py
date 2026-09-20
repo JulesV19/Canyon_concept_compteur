@@ -28,13 +28,16 @@ def sync_dir(folder: Path) -> None:
         os.close(descriptor)
 
 
-def write_atomic(path: Path, data: bytes) -> None:
+def write_atomic(path: Path, data: bytes, mode: int | None = None) -> None:
     """Écrit un fichier d'un coup : un fichier temporaire forcé sur la carte, puis renommé. Même si le courant est coupé,
     on trouve l'ancien fichier ou le nouveau, jamais un fichier vide ou à moitié écrit. En cas d'échec (carte pleine...),
-    le fichier temporaire est effacé et l'erreur remonte."""
+    le fichier temporaire est effacé et l'erreur remonte. `mode` : droits du fichier (0o600 pour un secret), posés avant
+    d'y écrire."""
     temporary = path.with_name(path.name + ".tmp")
     try:
         with open(temporary, "wb") as file:
+            if mode is not None:
+                os.fchmod(file.fileno(), mode)
             file.write(data)
             file.flush()
             os.fsync(file.fileno())
@@ -66,10 +69,10 @@ class Writer:
     le fil. `post(fonction)` doit faire appeler la fonction sur le fil de l'interface (voir app.py) : c'est là qu'arrive
     le résultat de chaque tâche."""
 
-    def __init__(self, post: Callable[[Callable[[], None]], None]):
+    def __init__(self, post: Callable[[Callable[[], None]], None], name: str = "ecriture"):
         self._post = post
         self._tasks: queue.SimpleQueue = queue.SimpleQueue()
-        self._thread = threading.Thread(target=self._run, name="ecriture", daemon=True)
+        self._thread = threading.Thread(target=self._run, name=name, daemon=True)
         self._thread.start()
 
     def submit(self, task: Callable[[], object],

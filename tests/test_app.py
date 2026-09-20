@@ -1,6 +1,7 @@
 """L'appli entière, hors écran, dans un processus à part : coupure en pleine sortie ou sur le résumé, enregistrement
 refusé, fichiers abîmés, touches qui quittent, Éteindre."""
 
+import json
 import os
 import shutil
 import signal
@@ -9,6 +10,8 @@ from pathlib import Path
 import pytest
 from garmin_fit_sdk import Decoder, Stream
 
+from compteur.route import Route
+from compteur.strava import CACHE_FILE, TOKENS_FILE, save_tokens
 from pilote import ROOT, launch
 
 
@@ -66,6 +69,84 @@ def test_coupure_en_pleine_sortie_elle_reprend_en_pause(tmp_path):
     assert after["after"]["state"] == "running" and after["after"]["distance"] > after["distance"] + 500
     assert after["jumpM"] < 150  # le cycliste simulé repart d'où il était
     assert "Sortie reprise" in process.stdout
+
+
+def test_page_segment_ouverte_au_depart_puis_retiree(tmp_path):
+    """La page segment arrive toujours en deuxième, quelle que soit la page affichée, puis s'en va en y revenant."""
+    process, result = launch("""
+        c = open_app()
+        c.window.setProperty("segmentResultMs", 300)
+        def flow():
+            c.session.start(0)
+            c.window.setProperty("screen", "ride")
+            c.window.setProperty("page", 3)  # page cardio
+            tracker = c.model.tracker
+            for _ in range(4 * 3600):  # jusqu'au départ de la côte d'essai
+                if tracker.active:
+                    break
+                c.step()
+            c.tick()
+            wait(800)  # les bandes orange passent, la page segment arrive
+            opened = {"count": c.window.property("pageCount"), "open": c.window.property("segmentOpen"),
+                      "page": c.window.property("page")}
+            for _ in range(3600):  # jusqu'à l'arrivée
+                if tracker.results:
+                    break
+                c.step()
+            c.tick()
+            wait(100)
+            page = c.window.findChild(QObject, "segmentPage")
+            finished = {"result": page.property("finished"), "page": c.window.property("page")}
+            wait(700)  # le résultat s'en va, et la page avec lui
+            closed = {"count": c.window.property("pageCount"), "open": c.window.property("segmentOpen"),
+                      "page": c.window.property("page")}
+            report({"opened": opened, "finished": finished, "closed": closed})
+        run(c, flow)
+    """, tmp_path)
+    assert process.returncode == 0, process.stderr
+    assert result["opened"] == {"count": 6, "open": True, "page": 1}
+    assert result["finished"] == {"result": True, "page": 1}
+    assert result["closed"] == {"count": 5, "open": False, "page": 3}  # de retour sur la page cardio
+
+
+def test_segments_strava_au_menu_puis_suivis_en_sortie(tmp_path):
+    """Les favoris du cache Strava : au menu (↓ puis Entrée), puis suivis pendant la sortie. Sans synchro : rien ne
+    part sur le réseau."""
+    folder = tmp_path / "strava"
+    route = Route.load(ROOT / "parcours" / "foret-de-rambouillet.gpx")
+    save_tokens(folder / TOKENS_FILE, {"client_id": "0", "client_secret": "x", "access_token": "x",
+                                       "refresh_token": "x", "expires_at": 0, "athlete": {"id": 1, "sex": "F"}})
+    (folder / CACHE_FILE).write_text(json.dumps({
+        "athlete": {"id": 1, "sex": "F"}, "synced_at": 1,
+        "segments": [{"id": 5, "name": "Côte test", "points": [[p.lat, p.lon, p.ele] for p in route.points[40:120]],
+                      "pr": {"elapsed_s": 300, "date": "2026-06-03"}, "kom_s": 200, "qom_s": 240, "detail_at": 1}],
+    }))
+    process, result = launch(f"""
+        c = open_app(strava_dir=Path({str(folder)!r}))
+        def flow():
+            activate(c)
+            c.window.setProperty("screen", "menu")
+            wait(400)
+            QTest.keyClick(c.window, Qt.Key.Key_Down)    # Segments Strava
+            QTest.keyClick(c.window, Qt.Key.Key_Return)
+            wait(400)
+            page = c.window.findChild(QObject, "segmentsPage")
+            opened = {{"screen": c.window.property("screen"), "listed": [s["name"] for s in page.property("segments")],
+                       "syncing": c.strava.property("syncing")}}
+            QTest.keyClick(c.window, Qt.Key.Key_Escape)  # retour au menu
+            wait(400)
+            back = c.window.property("screen")
+            c.window.setProperty("screen", "home")
+            c.session.start(0)
+            report({{"opened": opened, "back": back, "followed": [s.name for s in c.model.segments],
+                     "label": c.model.kom_label, "crown": c.model.segments[0].kom.elapsed_s}})
+        run(c, flow)
+    """, tmp_path)
+    assert process.returncode == 0, process.stderr
+    assert result["opened"] == {"screen": "segments", "listed": ["Côte test"], "syncing": False}
+    assert result["back"] == "menu"
+    assert result["followed"] == ["Côte test"]  # pas de côte d'essai : le parcours passe par un favori
+    assert (result["label"], result["crown"]) == ("QOM", 240)
 
 
 def test_coupure_sur_le_resume_puis_enregistrement(tmp_path):
@@ -286,3 +367,77 @@ def test_eteindre_refuse_puis_accepte(tmp_path):
     assert process.returncode == 0, process.stderr
     assert state == {"refusals": ["le système refuse l'arrêt"], "quits": [], "quitsAfter": [True]}
     assert "Arrêt refusé (1)" in process.stderr
+
+
+def test_batterie_depuis_les_reglages(tmp_path):
+    """Réglages, ↓ jusqu'à Batterie puis Entrée : l'écran Batterie, avec la batterie simulée ; Échap : les réglages.
+    La barre d'état suit la même batterie, et montre la charge (chargeur branché : temps avant d'être pleine)."""
+    process, state = launch("""
+        c = open_app()
+        def flow():
+            activate(c)
+            for _ in range(20 * 60):  # 20 min de mise en route
+                c.step()
+            c.refresh()
+            c.window.setProperty("screen", "settings")
+            for _ in range(3):
+                QTest.keyClick(c.window, Qt.Key.Key_Down)
+            QTest.keyClick(c.window, Qt.Key.Key_Return)
+            wait(100)
+            values = c.battery.values
+            state = {"screen": c.window.property("screen"), "source": values["source"], "state": values["state"],
+                     "percent": round(values["percent"], 1), "barPct": c.model.values["batteryPct"],
+                     "autonomyH": round(values["autonomyS"] / 3600, 2), "curve": len(c.battery.curve)}
+            state["barCharging"] = c.model.values["batteryCharging"]
+            from compteur.battery import Reading, Supply
+            c.battery.update(1300, Reading(50.0, 3.9, rate_pct_h=20.0), Supply())  # chargeur branché
+            c.refresh()
+            values = c.battery.values
+            state["charging"] = [values["state"], round(values["fullInS"] / 3600, 2), c.model.values["batteryCharging"],
+                                 c.model.values["batteryPct"]]
+            QTest.keyClick(c.window, Qt.Key.Key_Escape)
+            wait(100)
+            state["back"] = c.window.property("screen")
+            report(state)
+        run(c, flow)
+    """, tmp_path)
+    assert process.returncode == 0, process.stderr
+    assert state == {"screen": "battery", "source": "Simulation", "state": "decharge", "percent": 94.4, "barPct": 94,
+                     "autonomyH": 5.67, "curve": 41, "barCharging": False,
+                     "charging": ["charge", 2.5, True, 50], "back": "settings"}
+
+
+def test_gps_depuis_les_reglages(tmp_path):
+    """Réglages, ↓ jusqu'à GPS puis Entrée : l'écran GPS, avec le GPS simulé, qui a trouvé sa position ; ↓ fait
+    défiler la page ; Échap : les réglages."""
+    process, state = launch("""
+        c = open_app()
+        def flow():
+            activate(c)
+            for _ in range(30):
+                c.step()
+            c.refresh()
+            c.window.setProperty("screen", "settings")
+            for _ in range(4):
+                QTest.keyClick(c.window, Qt.Key.Key_Down)
+            QTest.keyClick(c.window, Qt.Key.Key_Return)
+            wait(400)
+            values = c.gps_model.values
+            page = c.window.findChild(QObject, "gpsPage")
+            QTest.keyClick(c.window, Qt.Key.Key_Down)
+            wait(100)
+            state = {"screen": c.window.property("screen"), "source": values["source"], "state": values["state"],
+                     "used": values["used"], "inView": values["inView"],
+                     "constellations": [k["name"] for k in values["constellations"]],
+                     "shown": len(page.property("satellites")), "firstFixS": values["firstFixS"],
+                     "scrolled": page.findChild(QObject, "gpsScroll").property("contentY") > 0}
+            QTest.keyClick(c.window, Qt.Key.Key_Escape)
+            wait(100)
+            state["back"] = c.window.property("screen")
+            report(state)
+        run(c, flow)
+    """, tmp_path)
+    assert process.returncode == 0, process.stderr
+    assert state == {"screen": "gps", "source": "Simulation", "state": "3d", "used": 10, "inView": 15,
+                     "constellations": ["GPS", "GLONASS", "Galileo", "SBAS"], "shown": 15, "firstFixS": 4.0,
+                     "scrolled": True, "back": "settings"}

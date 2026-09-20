@@ -1,6 +1,6 @@
 # Canyon compteur
 
-Compteur vélo autonome pour un Canyon Ultimate : Raspberry Pi Zero 2 W, écran tactile 2,8" 480×640 en portrait, interface Qt Quick (PySide6). Projet personnel en cours ; les capteurs sont encore simulés.
+Compteur vélo autonome pour un Canyon Ultimate : Raspberry Pi Zero 2 W, écran tactile 2,8" 480×640 en portrait, interface Qt Quick (PySide6). Projet personnel en cours ; les capteurs sont encore simulés, sauf la jauge de batterie.
 
 <img src="docs/intro.gif" alt="Intro" width="160"> <img src="docs/accueil.png" alt="Accueil" width="160"> <img src="docs/principale.png" alt="Page principale" width="160"> <img src="docs/carte.png" alt="Carte" width="160"> <img src="docs/altitude.png" alt="Altitude" width="160"> <img src="docs/cardio.png" alt="Cardio" width="160"> <img src="docs/tours.png" alt="Tours" width="160"> <img src="docs/resume.png" alt="Résumé" width="160"> <img src="docs/sorties.png" alt="Mes sorties" width="160">
 
@@ -9,9 +9,11 @@ Compteur vélo autonome pour un Canyon Ultimate : Raspberry Pi Zero 2 W, écran 
 - Parcours GPX (dossier `parcours/`) ou sortie libre ; départ au premier signal GPS.
 - Cinq pages pendant la sortie : principale, carte OSM hors ligne, altitude, cardio, tours.
 - Auto-pause, tours, résumé de fin de sortie.
+- Segments Strava en favori : annonce à l'approche, page en direct comparée à ton record, résultat à l'arrivée (voir [Strava](#strava)).
 - Enregistrement en `.fit` (Strava, Garmin Connect) et historique, dans `sorties/`.
 - Reprise après coupure : la sortie en cours est écrite dans `sorties/reprise.jsonl` toutes les 30 s.
 - Réglages : FC max, auto-pause, luminosité (`~/.config/canyon-compteur/reglages.json`).
+- Batterie (depuis les Réglages), en direct pour les essais d'autonomie : charge, autonomie et prévision, tension, variation, courant estimé, alimentation 5 V et température du Pi. Sur le Pi, la jauge MAX17048 (lue toutes les 2 s par son propre fil, `compteur/battery.py`) ; sur le Mac, une batterie simulée. L'autonomie suit la pente de la charge sur les 15 dernières minutes, et le courant se déduit de la capacité (5000 mAh, `CAPACITY_MAH`) : la jauge ne le mesure pas.
 
 ## Lancer sur le Mac
 
@@ -38,7 +40,23 @@ pmtiles extract https://build.protomaps.com/20260911.pmtiles cartes/osm-ile-de-f
 cd tools/carte && npx -y -p node@24 -c "npm install" && npm run construire
 ```
 
-Zooms 8 à 12 sur toute la région, 13 à 16 autour des parcours (≈ 70 s, ≈ 95 Mo) : à relancer après l'ajout d'un GPX.
+Zooms 8 à 12 sur toute la région, 13 à 16 autour des parcours (≈ 1 min, ≈ 130 Mo) : à relancer après l'ajout d'un GPX.
+
+## Strava
+
+Les segments vélo mis en favori sur Strava. Annonce à 300 m du départ, page en direct pendant l'effort (écart à ton record au même point, KOM ou QOM), résultat à l'arrivée. Le compteur les synchronise à son démarrage et depuis Menu ≡ → Segments Strava, et les garde pour rouler sans réseau (`~/.config/canyon-compteur/segments.json`).
+
+L'écart au record se compte au même point du segment : les temps de passage viennent de la sortie du record, relue par le compteur. Un record battu avec le compteur sert dès la sortie suivante (`records.json`, à côté), jusqu'à ce que Strava en donne un autre : une fois la sortie envoyée, c'est le temps de Strava qui fait foi. Au simulateur, le parcours « Longchamp et Meudon » passe par deux segments en favori : la boucle de Longchamp et la côte des Gardes.
+
+1. Crée une application sur [strava.com/settings/api](https://www.strava.com/settings/api), avec `localhost` comme Authorization Callback Domain.
+2. Relie chaque appareil : le script demande le Client ID et le Client Secret la première fois, puis ouvre la page d'autorisation de Strava.
+
+```bash
+.venv/bin/python tools/strava/connecter.py        # ce Mac, puis une première synchro
+.venv/bin/python tools/strava/connecter.py --pi   # le Pi (jetons posés par ssh)
+```
+
+Un jeton par appareil : Strava peut remplacer un jeton quand il s'en sert, et un jeton partagé couperait l'autre appareil. Strava limite les lectures (100 par quart d'heure) : la synchro ne relit que les segments nouveaux, le KOM une fois par semaine, et la sortie d'un record une seule fois.
 
 ## Raspberry Pi
 
@@ -48,6 +66,7 @@ Raspberry Pi OS Lite 64 bits, PySide6 ≥ 6.10 installé par pip.
 tools/pi/envoyer.sh                                               # copie le projet dans ~/compteur
 ssh -4 julesvide@compteur.local compteur/tools/pi/installer.sh    # paquets, venv, réserve CMA, droit d'éteindre
 ssh -4 julesvide@compteur.local 'cd compteur && .venv/bin/python -m compteur --miroir'
+ssh -4 julesvide@compteur.local 'cd compteur && .venv/bin/python tools/pi/essai_capteurs.py'  # jauge et GPS (bus I2C)
 ```
 
 - Plein écran sans bureau (`linuxfb` par DRM), **dessiné par le processeur** (`PI_QT_ENV` dans `compteur/app.py`). Le GPU est écarté : sur le Zero 2 W, son pilote (vc4) corrompt la mémoire, jusqu'à figer le Pi (noyaux 6.18.34 à 6.18.50).
@@ -62,7 +81,7 @@ Matériel prévu : [docs/materiel.md](docs/materiel.md).
 | `compteur/` | backend Python : moteur de calcul sans Qt (`ride.py`), parcours, modèles pour l'interface, FIT, historique, reprise, simulateur |
 | `compteur/ui/` | interface QML (`Main.qml` : navigation et raccourcis), polices Barlow, trame carbone |
 | `tests/` | pytest, dont l'appli entière hors écran (`tests/pilote.py`) |
-| `tools/` | fabrication de la carte (Node + MapLibre), envoi et installation sur le Pi, trame carbone |
+| `tools/` | fabrication de la carte (Node + MapLibre), connexion à Strava, envoi et installation sur le Pi, trame carbone |
 | `parcours/` | parcours GPX de démo |
 | `cartes/`, `sorties/` | carte générée et sorties enregistrées (non versionnées) |
 
@@ -84,6 +103,7 @@ Matériel prévu : [docs/materiel.md](docs/materiel.md).
 ## Crédits
 
 - Logo Canyon redessiné d'après [CanyonBicycles.svg](https://commons.wikimedia.org/wiki/File:CanyonBicycles.svg) (Wikimedia Commons) ; marque de Canyon Bicycles GmbH, usage personnel.
+- Logo Strava redessiné d'après [Simple Icons](https://simpleicons.org) (CC0) ; marque de Strava, Inc., usage personnel.
 - Police [Barlow](https://github.com/jpt/barlow), licence SIL Open Font License.
 - Parcours de démo calculés avec [BRouter](https://brouter.de).
 - Données cartographiques © les contributeurs d'OpenStreetMap.

@@ -2,13 +2,15 @@ import QtQuick
 import QtQuick.Shapes
 import "Format.js" as Format
 
-// Menu de l'accueil : Mes sorties, Réglages, et Éteindre, à maintenir pour éviter une fausse manœuvre.
-// Au clavier : ↑ ↓ pour choisir, Entrée ou → pour ouvrir.
+// Menu de l'accueil : Mes sorties, Segments Strava, Réglages, et Éteindre, à maintenir pour éviter une fausse
+// manœuvre. Au clavier : ↑ ↓ pour choisir, Entrée ou → pour ouvrir.
 Item {
     id: page
     required property var history  // HistoryModel : sorties enregistrées
+    required property var strava   // StravaModel : segments en favori
     signal back
     signal ridesRequested
+    signal segmentsRequested
     signal settingsRequested
     signal powerOffRequested
 
@@ -20,12 +22,14 @@ Item {
 
     function moveFocus(delta) {
         keyboard = true
-        focusRow = (focusRow + delta + 2) % 2
+        focusRow = (focusRow + delta + 3) % 3
     }
     function activate() {
         keyboard = true
         if (focusRow === 0)
             ridesRequested()
+        else if (focusRow === 1)
+            segmentsRequested()
         else
             settingsRequested()
     }
@@ -54,7 +58,7 @@ Item {
         x: 16
         y: header.height + 4
         width: parent.width - 32
-        height: 2 * 100 + 1
+        height: 3 * 100 + 2
 
         Column {
             anchors.fill: parent
@@ -82,21 +86,40 @@ Item {
                 }
             }
 
-            Rectangle {
-                x: 20
-                width: panel.width - 40
-                height: 1
-                color: Theme.hairline
-            }
+            Separator {}
 
             MenuRow {
+                readonly property int count: page.strava.segments.length
                 width: panel.width
-                label: "Réglages"
-                hint: "FC max, auto-pause, luminosité"
+                label: "Segments Strava"
+                hint: !page.strava.connected ? "Pas encore relié à Strava"
+                    : page.strava.syncing ? "Synchro en cours…"
+                    : count > 0 ? count + (count > 1 ? " segments en favori" : " segment en favori")
+                    : page.strava.error !== "" ? "Synchro inachevée : " + page.strava.error
+                    : "Aucun segment en favori"
                 focused: page.keyboard && page.focusRow === 1
                 onTapped: {
                     page.keyboard = false
                     page.focusRow = 1
+                    page.segmentsRequested()
+                }
+
+                StravaMark {
+                    anchors { right: parent.right; rightMargin: 73; verticalCenter: parent.verticalCenter }
+                    width: 26
+                }
+            }
+
+            Separator {}
+
+            MenuRow {
+                width: panel.width
+                label: "Réglages"
+                hint: "FC max, auto-pause, luminosité, batterie, GPS"
+                focused: page.keyboard && page.focusRow === 2
+                onTapped: {
+                    page.keyboard = false
+                    page.focusRow = 2
                     page.settingsRequested()
                 }
             }
@@ -122,6 +145,13 @@ Item {
         height: 68
         text: "Maintenir pour éteindre"
         onActivated: page.powerOffRequested()
+    }
+
+    component Separator: Rectangle {
+        x: 20
+        width: panel.width - 40
+        height: 1
+        color: Theme.hairline
     }
 
     // Une entrée du menu : libellé, précision en dessous, chevron à droite
@@ -156,7 +186,9 @@ Item {
         Text {
             x: 24
             anchors { top: rowLabel.bottom; topMargin: 2 }
+            width: row.width - x - 128  // jusqu'à la vignette
             text: row.hint
+            elide: Text.ElideRight
             color: Theme.ash
             font { family: Theme.sans; pixelSize: 15; weight: Font.Medium }
         }

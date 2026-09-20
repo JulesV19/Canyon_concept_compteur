@@ -26,3 +26,16 @@ CardioPage 1.0 CardioPage.qml
 LapsPage 1.0 LapsPage.qml
 MapView 1.0 MapView.qml
 LapBanner 1.0 LapBanner.qml
+SlantedBar 1.0 SlantedBar.qml
+StravaMark 1.0 StravaMark.qml
+StravaSweep 1.0 StravaSweep.qml
+SegmentProfile 1.0 SegmentProfile.qml
+SegmentBanner 1.0 SegmentBanner.qml
+SegmentPage 1.0 SegmentPage.qml
+SegmentsPage 1.0 SegmentsPage.qml
+BatteryPage 1.0 BatteryPage.qml
+Bolt 1.0 Bolt.qml
+SlantRule 1.0 SlantRule.qml
+StateChip 1.0 StateChip.qml
+MeasureTile 1.0 MeasureTile.qml
+GpsPage 1.0 GpsPage.qml

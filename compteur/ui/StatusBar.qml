@@ -37,7 +37,11 @@ Item {
         spacing: 14
 
         SignalBars { bars: bar.values.gpsBars ?? 0; anchors.verticalCenter: parent.verticalCenter }
-        Battery { percent: bar.values.batteryPct ?? 0; anchors.verticalCenter: parent.verticalCenter }
+        Battery {
+            percent: bar.values.batteryPct ?? 0
+            charging: bar.values.batteryCharging === true
+            anchors.verticalCenter: parent.verticalCenter
+        }
     }
 
     // État de la sortie sur une étiquette penchée comme le logo : Prêt, Tour n, Pause, Auto-pause.
@@ -130,15 +134,20 @@ Item {
         }
     }
 
-    // Batterie : pourcentage + pile qui se vide
+    // Batterie : pourcentage + pile qui se vide ; en charge, un éclair et la pile en vert
     component Battery: Row {
         property int percent: 100
+        property bool charging: false
         spacing: 6
 
         Text {
             text: percent + " %"
             color: Theme.lacquer
             font { family: Theme.sans; pixelSize: 16; weight: Font.DemiBold; features: ({ "tnum": 1 }) }
+            anchors.verticalCenter: parent.verticalCenter
+        }
+        Bolt {
+            visible: charging
             anchors.verticalCenter: parent.verticalCenter
         }
         Item {
@@ -159,7 +168,7 @@ Item {
                     width: Math.max(2, (parent.width - 4) * percent / 100)
                     height: parent.height - 4
                     radius: 1.5
-                    color: percent <= 20 ? Theme.danger : Theme.lacquer
+                    color: charging ? Theme.ok : percent <= 20 ? Theme.danger : Theme.lacquer
                 }
             }
             Rectangle {

@@ -17,7 +17,9 @@ QtObject {
     readonly property color ok: "#3CCB7F"
     readonly property color warning: "#F5A524"       // hors parcours, pause, recherche GPS, pente
     readonly property color danger: "#F2542D"
-    readonly property color taillight: "#FF3B30"     // enregistrement en cours, nord, forte pente
+    readonly property color taillight: "#FF3B30"     // enregistrement en cours, nord, forte pente, retard sur un record
+    // Seule couleur de marque tolérée : le logo Strava et ses animations, jamais un chiffre
+    readonly property color strava: "#FC4C02"
     readonly property var zones: ["#7D8A96", "#3FA7D6", "#3CCB7F", "#F5A524", "#F2542D"]
 
     // Pente de la route : neutre sur le plat ; ambre, orange puis rouge quand ça grimpe ; bleu dans les descentes

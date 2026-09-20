@@ -7,6 +7,9 @@ Window {
     required property var session         // parcours de l'accueil, départ et fin (SessionModel)
     required property var history         // sorties enregistrées (HistoryModel)
     required property var settings        // réglages (SettingsModel)
+    required property var strava          // segments Strava en favori et leur synchro (StravaModel)
+    required property var battery         // charge, autonomie et mesures de la batterie (BatteryModel)
+    required property var gps             // état de la réception GPS (GpsModel)
     required property int tickMs          // durée d'un pas de simulation, pour animer la carte
     required property bool introEnabled
     required property bool introAutoplay  // faux : l'intro est pilotée image par image (enregistrement)
@@ -15,10 +18,13 @@ Window {
     property alias introTime: intro.t
     readonly property real introDuration: intro.duration
     // "home" : accueil ; "ride" : sortie en cours ; "summary" : résumé de la sortie terminée ;
-    // menu (bouton ≡ de l'accueil) : "menu", puis "settings" (réglages), "rides" (Mes sorties), "saved" (une sortie
-    // rouverte)
+    // menu (bouton ≡ de l'accueil) : "menu", puis "settings" (réglages), "battery" et "gps" (Batterie et GPS, depuis
+    // les réglages), "rides" (Mes sorties), "saved" (une sortie rouverte), "segments" (Segments Strava)
     property string screen: "home"
     property string resumedAt: ""  // sortie reprise au démarrage après une coupure : heure de sa dernière écriture
+    property int segmentResultMs: 15000  // durée du résultat d'un segment à l'écran
+    readonly property int pageCount: pages.count
+    readonly property bool segmentOpen: segmentPage.inPages
     readonly property bool introRunning: intro.visible
     readonly property bool paused: ride.values.state === "paused"
 
@@ -37,8 +43,11 @@ Window {
     readonly property var menuTrail: ({
         menu: ["menu"],
         settings: ["menu", "settings"],
+        battery: ["menu", "settings", "battery"],
+        gps: ["menu", "settings", "gps"],
         rides: ["menu", "rides"],
-        saved: ["menu", "rides", "saved"]
+        saved: ["menu", "rides", "saved"],
+        segments: ["menu", "segments"]
     })[screen] ?? []
     function inMenu(name) {
         return menuTrail.indexOf(name) >= 0
@@ -51,6 +60,11 @@ Window {
     function openRides() {
         ridesPage.replay()
         screen = "rides"
+    }
+    function openSegments() {
+        strava.check()  // relié depuis le démarrage ?
+        segmentsPage.replay()
+        screen = "segments"
     }
     function openRide(index) {
         history.open(index)
@@ -69,6 +83,7 @@ Window {
         if (screen !== "home")
             return
         resumedAt = ""  // une sortie neuve n'est pas une sortie reprise
+        closeSegmentPage()
         launch.run(home.cardRect())
         session.start(index)
         pages.currentIndex = 0
@@ -78,6 +93,7 @@ Window {
     function finish() {
         if (screen !== "ride")
             return
+        closeSegmentPage()
         session.finish()
         summaryPage.replay()
         screen = "summary"
@@ -100,6 +116,93 @@ Window {
         screen = "home"
         home.replay()
     }
+
+    // Page segment : toujours la deuxième, juste après la page principale. Ajoutée au départ d'un segment et montrée
+    // d'office pendant que les bandes orange passent ; retirée après l'arrivée (ou l'abandon), en revenant à la page
+    // d'avant.
+    readonly property int segmentPageIndex: 1
+    property Item pageBeforeSegment: null
+    function indexOfPage(item) {
+        for (let i = 0; i < pages.count; i++) {
+            if (pages.itemAt(i) === item)
+                return i
+        }
+        return -1
+    }
+    // Page affichée sans glisser : les bandes orange font la transition
+    function showPage(index) {
+        const view = pages.contentItem
+        const duration = view.highlightMoveDuration
+        view.highlightMoveDuration = 0
+        pages.currentIndex = index
+        view.highlightMoveDuration = duration
+    }
+    function openSegmentPage(sweeping) {
+        if (screen !== "ride")
+            return
+        if (!segmentPage.inPages) {
+            pageBeforeSegment = pages.currentItem
+            pages.insertItem(segmentPageIndex, segmentPage)
+            segmentPage.inPages = true
+            showPage(indexOfPage(pageBeforeSegment))  // la page affichée reste la même jusqu'aux bandes
+        }
+        if (pages.currentItem === segmentPage || segmentSwitch.running)
+            return
+        if (sweeping) {
+            sweep.run()
+            segmentSwitch.restart()
+        } else {
+            showPage(indexOfPage(segmentPage))
+        }
+    }
+    function closeSegmentPage() {
+        segmentHold.stop()
+        segmentSwitch.stop()
+        segmentPage.result = null
+        if (!segmentPage.inPages)
+            return
+        const back = pages.currentItem === segmentPage ? pageBeforeSegment : pages.currentItem
+        pages.takeItem(indexOfPage(segmentPage))
+        segmentPage.inPages = false
+        showPage(Math.max(0, indexOfPage(back)))
+    }
+    // Les bandes sont au milieu de l'écran : la page segment arrive
+    Timer {
+        id: segmentSwitch
+        interval: 350
+        onTriggered: {
+            root.showPage(root.indexOfPage(segmentPage))
+            segmentPage.enter()
+        }
+    }
+    // Le résultat reste quelques secondes, puis la page s'en va (sauf si un autre segment est en cours)
+    Timer {
+        id: segmentHold
+        interval: root.segmentResultMs
+        onTriggered: {
+            segmentPage.result = null
+            if (root.ride.values.segment === undefined)
+                root.closeSegmentPage()
+        }
+    }
+    Connections {
+        target: root.ride
+        function onSegmentStarted(card) {
+            root.openSegmentPage(true)
+        }
+        function onSegmentFinished(result) {
+            segmentPage.result = result
+            root.openSegmentPage(false)
+            segmentPage.celebrate(result.newRecord === true)
+            if (result.newRecord === true)
+                sweep.run()
+            segmentHold.restart()
+        }
+        function onSegmentAbandoned(card) {
+            if (segmentPage.result === null && root.ride.values.segment === undefined)
+                root.closeSegmentPage()
+        }
+    }
     Connections {
         target: root.session
         function onSaved() {
@@ -121,6 +224,8 @@ Window {
             settingsPage.activate()
         else if (screen === "rides")
             ridesPage.activate()
+        else if (screen === "segments")
+            segmentsPage.activate()
         else if (screen === "saved")
             back()
         else if (screen === "summary")
@@ -173,7 +278,7 @@ Window {
                 root.turn(summaryPage, 1)
             else if (root.screen === "saved")
                 root.turn(savedPage, 1)
-            else
+            else if (root.screen === "ride")
                 root.turn(pages, 1)
         }
     }
@@ -185,22 +290,23 @@ Window {
                 home.previous()
             else if (root.screen === "settings")
                 settingsPage.adjust(-1)
-            else if (root.screen === "menu" || root.screen === "rides")
+            else if (["menu", "rides", "segments", "battery", "gps"].indexOf(root.screen) >= 0)
                 root.back()
             else if (root.screen === "summary")
                 root.turn(summaryPage, -1)
             else if (root.screen === "saved")
                 root.turn(savedPage, -1)
-            else
+            else if (root.screen === "ride")
                 root.turn(pages, -1)
         }
     }
     Shortcut {
         sequences: ["Up", "Down"]
         context: Qt.ApplicationShortcut
-        enabled: ["menu", "settings", "rides"].indexOf(root.screen) >= 0
+        enabled: ["menu", "settings", "rides", "segments", "gps"].indexOf(root.screen) >= 0
         onActivated: {
-            const list = root.screen === "menu" ? menuPage : root.screen === "settings" ? settingsPage : ridesPage
+            const list = root.screen === "menu" ? menuPage : root.screen === "settings" ? settingsPage
+                : root.screen === "segments" ? segmentsPage : root.screen === "gps" ? gpsPage : ridesPage
             list.moveFocus(sequence === "Up" ? -1 : 1)
         }
     }
@@ -286,8 +392,10 @@ Window {
         visible: x < width
         Behavior on x { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
         history: root.history
+        strava: root.strava
         onBack: root.back()
         onRidesRequested: root.openRides()
+        onSegmentsRequested: root.openSegments()
         onSettingsRequested: root.screen = "settings"
         onPowerOffRequested: root.session.powerOff()
     }
@@ -301,6 +409,38 @@ Window {
         visible: x < width
         Behavior on x { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
         settings: root.settings
+        battery: root.battery
+        gps: root.gps
+        onBack: root.back()
+        onBatteryRequested: root.screen = "battery"
+        onGpsRequested: {
+            gpsPage.replay()
+            root.screen = "gps"
+        }
+    }
+
+    GpsPage {
+        id: gpsPage
+        objectName: "gpsPage"  // pour les essais
+        anchors { top: statusBar.bottom; bottom: parent.bottom }
+        width: parent.width
+        x: root.inMenu("gps") ? 0 : width
+        enabled: root.screen === "gps"
+        visible: x < width
+        Behavior on x { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+        gps: root.gps
+        onBack: root.back()
+    }
+
+    BatteryPage {
+        id: batteryPage
+        anchors { top: statusBar.bottom; bottom: parent.bottom }
+        width: parent.width
+        x: root.inMenu("battery") ? 0 : width
+        enabled: root.screen === "battery"
+        visible: x < width
+        Behavior on x { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+        battery: root.battery
         onBack: root.back()
     }
 
@@ -315,6 +455,19 @@ Window {
         history: root.history
         onBack: root.back()
         onOpenRequested: index => root.openRide(index)
+    }
+
+    SegmentsPage {
+        id: segmentsPage
+        objectName: "segmentsPage"  // pour les essais
+        anchors { top: statusBar.bottom; bottom: parent.bottom }
+        width: parent.width
+        x: root.inMenu("segments") ? 0 : width
+        enabled: root.screen === "segments"
+        visible: x < width
+        Behavior on x { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+        strava: root.strava
+        onBack: root.back()
     }
 
     // Une sortie rouverte depuis Mes sorties : le même résumé, avec Retour et Supprimer
@@ -399,6 +552,33 @@ Window {
             x: 16
             y: 4
             width: parent.width - 32
+        }
+
+        // Annonce d'un segment en favori, à son approche
+        SegmentBanner {
+            objectName: "segmentBanner"  // pour les essais
+            x: 16
+            y: 4
+            width: parent.width - 32
+            values: root.ride.values
+            profile: root.ride.segmentProfile
+        }
+
+        // Départ d'un segment : les bandes orange passent sur les pages
+        StravaSweep {
+            id: sweep
+            anchors.fill: pages
+        }
+
+        // La page segment, hors des pages tant qu'aucun segment n'est en cours : elle ne dessine rien
+        Item {
+            visible: false
+
+            SegmentPage {
+                id: segmentPage
+                ride: root.ride
+                values: root.ride.values
+            }
         }
     }
 

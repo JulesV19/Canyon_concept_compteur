@@ -18,12 +18,16 @@ def main() -> None:
                         help="démarre directement sur l'accueil")
     parser.add_argument("--screenshot", metavar="FICHIER.png",
                         help="capture de l'écran (sans fenêtre), puis quitte")
-    parser.add_argument("--page", choices=["accueil", "libre", "menu", "sorties", "reglages", "principale", "carte",
-                                           "altitude", "cardio", "tours", "resume"],
+    parser.add_argument("--page", choices=["accueil", "libre", "menu", "sorties", "segments", "reglages", "batterie", "gps",
+                                           "principale",
+                                           "carte", "altitude", "cardio", "tours", "resume", "annonce", "segment",
+                                           "segment-fin"],
                         default="principale",
                         help="écran à capturer : accueil (libre : sur la carte Sortie libre), menu, Mes sorties, "
-                             "réglages, page de sortie après une sortie simulée (principale, carte, altitude, "
-                             "cardio, tours), ou son résumé (resume)")
+                             "Segments Strava, réglages, batterie (après --minutes de mise en route), GPS, page de sortie après une sortie simulée (principale, carte, "
+                             "altitude, "
+                             "cardio, tours), son résumé (resume), ou la côte d'essai : son annonce, le passage en "
+                             "cours (segment), son arrivée (segment-fin)")
     parser.add_argument("--minutes", type=float, default=51,
                         help="durée de la sortie simulée avant la capture ou la mesure")
     parser.add_argument("--intro-gif", metavar="FICHIER.gif",
@@ -47,13 +51,17 @@ def main() -> None:
 
     from .app import Compteur
     from .history import RIDES_DIR
+    from .strava import STRAVA_DIR
 
     # Seule l'appli protège la sortie en cours (fichier de reprise, reprise au démarrage) : ni les captures ni la mesure,
     # qui ne doivent jamais toucher aux sorties. La mesure fait une sortie et la supprime : dans un dossier à part.
-    rides_dir = Path(tempfile.mkdtemp(prefix="compteur-mesure-")) if args.mesure is not None else RIDES_DIR
+    # De même, seule l'appli synchronise Strava ; les captures montrent les segments déjà là, la mesure s'en passe.
+    measuring = args.mesure is not None
+    rides_dir = Path(tempfile.mkdtemp(prefix="compteur-mesure-")) if measuring else RIDES_DIR
     compteur = Compteur(sys.argv[:1], software_rendering=offscreen, accel=args.accel,
                         intro=not (args.sans_intro or args.screenshot), autoplay=not args.intro_gif,
-                        rides_dir=rides_dir, recovery=not (offscreen or args.mesure is not None))
+                        rides_dir=rides_dir, recovery=not (offscreen or measuring),
+                        strava_dir=None if measuring else STRAVA_DIR, strava_sync=not (offscreen or measuring))
     if args.intro_gif:
         compteur.record_intro(args.intro_gif, args.images)
         print(f"Intro enregistrée : {args.intro_gif}")

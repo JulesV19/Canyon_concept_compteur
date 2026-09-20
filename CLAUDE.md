@@ -11,16 +11,18 @@ Vue d'ensemble et commandes : README.md.
 ## Produit
 
 - Pas de capteur de puissance : aucune donnée de puissance à l'écran.
-- Accueil : le carrousel ne montre que les parcours puis « Sortie libre ». Tout nouvel écran (capteurs, Strava…) devient une entrée du menu ≡ (`MenuPage.qml`), seulement quand il marche, jamais en entrée « Bientôt ».
+- Accueil : le carrousel ne montre que les parcours puis « Sortie libre ». Tout nouvel écran (capteurs, Strava…) devient une entrée du menu ≡ (`MenuPage.qml`), seulement quand il marche, jamais en entrée « Bientôt ». Exception voulue : Batterie s'ouvre depuis les Réglages.
 - Identité « Graphite », accordée au Canyon Ultimate CF SL 7 Ash Grey :
-  - le gris est la marque, la couleur ne sert qu'à informer (pente, zones, alertes) ;
+  - le gris est la marque, la couleur ne sert qu'à informer (pente, zones, alertes) ; seule exception, l'orange Strava (`Theme.strava`), réservé au logo Strava et à ses animations, jamais à un chiffre ;
   - l'oblique du logo est le motif (chiffres penchés, coins coupés) ;
-  - police Barlow ; une seule grande animation, l'intro.
+  - police Barlow ; une seule grande animation, l'intro ; les segments Strava ont en plus des instants courts (moins d'une seconde) : annonce, départ, record battu.
 - Sobriété pour le Pi : l'écran ne change qu'au tic de chaque seconde (ce qui clignote suit ce tic), et une page hors de l'écran ne dessine rien.
 
 ## Données de l'utilisateur
 
 `sorties/` contient ses vraies sorties. Aucun script de test ou de capture n'y écrit : `compteur.history.folder = <dossier temporaire>` puis `compteur.history.reload()` avant toute action, `tmp_path` dans pytest. Le fichier de reprise ne s'active qu'avec `Compteur(recovery=True)` (l'appli seule).
+
+Strava : jetons, segments et records battus avec le compteur dans `~/.config/canyon-compteur/` (`strava.json`, `segments.json`, `records.json`). Seule l'appli synchronise et garde les records (`strava_sync=True`) ; essais et captures passent `strava_dir=<dossier temporaire>` (ou rien), jamais le vrai compte.
 
 ## Piloter l'appli hors écran
 

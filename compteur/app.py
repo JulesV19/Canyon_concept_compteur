@@ -17,15 +17,16 @@ from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow, QSGRendererInterface
 
-from . import history, journal
+from . import battery, gps, history, i2c, journal
 from .journal import Header, Journal
-from .model import RideModel
+from .model import BatteryModel, GpsModel, RideModel
 from .ride import Ride, State
 from .route import Route
 from .session import HistoryModel, SessionModel
 from .settings import SettingsModel, apply_brightness
-from .sim import GPS_FIX_S, SimulatedRider
+from .sim import GPS_FIX_S, SIMULATED_SUPPLY, SimulatedRider, battery_reading, demo_segments, gps_status
 from .storage import Writer, describe
+from .strava import StravaModel
 from .summary import ride_summary
 from .tiles import TileProvider
 
@@ -35,7 +36,9 @@ MAP_FILE = Path(__file__).resolve().parent.parent / "cartes" / "ile-de-france.mb
 PI_MODEL_FILE = Path("/proc/device-tree/model")  # modèle de la carte électronique, sur le Pi
 TICK_MS = 1000
 PAGES = {"principale": 0, "carte": 1, "altitude": 2, "cardio": 3, "tours": 4}  # pages de la sortie, dans l'ordre
-SCREENS = {"reglages": "settings", "menu": "menu", "sorties": "rides"}  # écrans du menu, pour les captures
+SCREENS = {"reglages": "settings", "menu": "menu", "sorties": "rides",
+           "segments": "segments", "batterie": "battery", "gps": "gps"}  # écrans du menu, pour les captures
+SEGMENT_PAGES = ("annonce", "segment", "segment-fin")  # la côte d'essai, pour les captures
 FREE_RIDE_NAME = "Sortie libre"
 # Sur le Pi, sans bureau : l'interface va droit à l'écran (linuxfb, par DRM), sans curseur, et c'est le processeur qui
 # dessine : le pilote du GPU des Pi 0 à 3 (vc4) corrompt la mémoire avec cette appli (voir le README)
@@ -91,9 +94,11 @@ class Relay(QObject):
 class Compteur:
     def __init__(self, argv: list[str], software_rendering: bool = False, accel: float = 1.0,
                  intro: bool = True, autoplay: bool = True, rides_dir: Path = history.RIDES_DIR,
-                 recovery: bool = False):
+                 recovery: bool = False, strava_dir: Path | None = None, strava_sync: bool = False):
         """`rides_dir` : dossier des sorties. `recovery` : la sortie en cours est gardée dans un fichier de reprise, et
-        reprend au démarrage après une coupure. C'est le cas de l'appli, pas des captures ni des mesures."""
+        reprend au démarrage après une coupure. C'est le cas de l'appli, pas des captures ni des mesures.
+        `strava_dir` : dossier des jetons et des segments Strava (sans lui, pas de segments en favori) ; `strava_sync` :
+        synchro au démarrage et records battus gardés, pour l'appli seule."""
         if on_raspberry_pi():
             for name, value in PI_QT_ENV.items():
                 os.environ.setdefault(name, value)  # une capture hors écran garde son réglage
@@ -139,7 +144,20 @@ class Compteur:
             history.clean(rides_dir)  # fichiers temporaires d'un enregistrement coupé
             self.journal = Journal(rides_dir / journal.FILE_NAME, self.writer)
         self.history = HistoryModel(rides_dir, parent=self.engine)  # sorties enregistrées, dans sorties/
+        # Segments Strava en favori : lus dans leur cache, synchronisés sur leur propre fil (voir strava.py)
+        self.strava = StravaModel(strava_dir, self.relay.post, parent=self.engine, writer=self.writer)
         self.model = RideModel(self.new_ride(), None, self.tiles.origin, parent=self.engine)
+        # Batterie : sur le Pi, la jauge, lue par son propre fil (voir battery.py) ; ailleurs, une batterie simulée
+        self.gauge = battery.Monitor().start() if on_raspberry_pi() else None
+        self.gauge_started = time.monotonic()
+        self.battery = BatteryModel("MAX17048" if self.gauge is not None else "Simulation", parent=self.engine)
+        # GPS : sur le Pi, le vrai, lu par son propre fil, pour son écran d'état (la sortie suit encore le cycliste
+        # simulé) ; ailleurs, un GPS simulé
+        self.gps = gps.Receiver(find=lambda: i2c.find(gps.ADDRESS)).start() if on_raspberry_pi() else None
+        self.gps_model = GpsModel("PA1010D" if self.gps is not None else "Simulation", parent=self.engine)
+        self.last_sample = None  # dernière mesure du cycliste simulé : la position du GPS simulé
+        if strava_sync:  # comme la synchro : l'appli seule, jamais une capture
+            self.model.record_beaten = self.strava.keep_record
         self.session = SessionModel(self.routes, self.start_ride, self.finish_ride, self.save_ride,
                                     self.discard_ride, self.power_off, parent=self.engine)
         # Après une coupure, on retrouve la sortie là où elle en était : son résumé, ou la sortie en pause
@@ -160,6 +178,9 @@ class Compteur:
             "session": self.session,
             "history": self.history,
             "settings": self.settings,
+            "strava": self.strava,
+            "battery": self.battery,
+            "gps": self.gps_model,
             "tickMs": 0 if software_rendering else tick_ms,
             "introEnabled": intro and screen == "home",
             "introAutoplay": autoplay,
@@ -170,11 +191,19 @@ class Compteur:
         if not self.engine.rootObjects():
             raise SystemExit("Impossible de charger l'interface (voir les erreurs QML ci-dessus)")
         self.window = self.engine.rootObjects()[0]
+        if strava_sync:
+            self.strava.sync_at_start()
 
     def new_ride(self) -> Ride:
         """Sortie au repos, avec les réglages du moment (auto-pause, FC max)."""
         settings = self.settings.current
         return Ride(auto_pause=settings.auto_pause, max_hr=settings.max_hr)
+
+    def follow_segments(self, route: Route) -> None:
+        """Segments suivis pendant la sortie : les favoris Strava, et la côte d'essai tant que le cycliste est simulé."""
+        starred = self.strava.starred()
+        self.model.segments = starred + demo_segments(route, starred)
+        self.model.kom_label = self.strava.kom_label
 
     def start_ride(self, route: Route | None) -> None:
         """Départ sur ce parcours, ou en sortie libre (le cycliste simulé roule alors sur le premier)."""
@@ -185,6 +214,7 @@ class Compteur:
         if self.journal is not None:
             route_file = route.path.name if route is not None and route.path is not None else None
             self.journal.start(Header(self.started_at, route_file, self.route_name, ride.auto_pause, ride.max_hr), ride)
+        self.follow_segments(self.rider.route)
         self.model.reset(ride, route)
         self.model.update(self.rider.sample(self.t, riding=False))  # des valeurs tout de suite, sans « -- »
         self.model.startPause()
@@ -283,6 +313,7 @@ class Compteur:
             self.session.show(summary)
             return "summary"
         route = next((r for r in self.routes if r.path is not None and r.path.name == header.route_file), None)
+        self.follow_segments(route or self.routes[0])
         self.model.resume(ride, route)
         if ride.state is State.RUNNING:
             self.model.startPause()  # elle attend Start pour repartir
@@ -323,11 +354,32 @@ class Compteur:
         """Avance d'une seconde : nouvelle mesure, mise à jour des calculs."""
         self.t += 1.0
         riding = self.model.ride.state is State.RUNNING
-        self.model.update(self.rider.sample(self.t, riding))
+        self.last_sample = self.rider.sample(self.t, riding)
+        self.model.update(self.last_sample)
+        if self.gauge is not None:
+            reading, supply = self.gauge.latest()
+            self.battery.update(time.monotonic() - self.gauge_started, reading, supply)
+        else:
+            self.battery.update(self.t - self.boot_t, battery_reading(self.t - self.boot_t), SIMULATED_SUPPLY)
+
+    def device_status(self) -> dict:
+        """État du boîtier (GPS, ceinture, batterie) : simulé, sauf la batterie quand la jauge répond."""
+        status = self.rider.device_status(self.t - self.boot_t)
+        if self.battery.percent is not None:
+            status["batteryPct"] = round(self.battery.percent)
+        status["batteryCharging"] = self.battery.state == "charge"
+        return status
+
+    def refresh(self) -> None:
+        """Met l'écran à jour : la sortie, l'état du boîtier, la batterie et le GPS."""
+        self.battery.refresh()
+        self.gps_model.refresh(self.gps.status() if self.gps is not None
+                               else gps_status(self.t - self.boot_t, self.last_sample))
+        self.model.refresh(self.device_status())
 
     def tick(self) -> None:
         self.step()
-        self.model.refresh(self.rider.device_status(self.t - self.boot_t))
+        self.refresh()
 
     def close(self) -> None:
         """Termine les écritures, puis détruit l'interface avant l'application Qt. Laissé à Python en quittant, l'ordre
@@ -336,10 +388,15 @@ class Compteur:
         if self.engine is None:
             return
         self.timer.stop()
+        if self.gauge is not None:
+            self.gauge.stop()
+        if self.gps is not None:
+            self.gps.stop()
         if self.journal is not None:
             self.journal.close()  # la sortie en cours reprendra au prochain démarrage
         if not self.writer.close():
             print("Écritures pas terminées à la fermeture", file=sys.stderr)
+        self.strava.close()
         shiboken6.delete(self.engine)  # avec l'interface, les modèles et le fournisseur de tuiles
         self.engine = None
 
@@ -349,7 +406,9 @@ class Compteur:
         return code
 
     def screenshot(self, path: str, page: str = "principale", minutes: float = 51) -> None:
-        if page in PAGES or page == "resume":
+        if page in SEGMENT_PAGES:
+            self._ride_to_segment(page)
+        elif page in PAGES or page == "resume":
             # Sortie de démo sur le premier parcours, avec un tour à mi-chemin.
             # 51 min par défaut : ni à l'arrêt, ni sur le plat.
             self.session.start(0)
@@ -372,14 +431,16 @@ class Compteur:
                 self.window.setProperty("screen", "ride")
                 self.window.setProperty("page", PAGES[page])
         else:
-            # Accueil ou écrans du menu, une fois le GPS prêt ; « libre » : l'accueil sur la carte Sortie libre
-            while self.t < GPS_FIX_S:
+            # Accueil ou écrans du menu, une fois le GPS prêt ; « libre » : l'accueil sur la carte Sortie libre ;
+            # « batterie » : après `minutes` de mise en route, pour voir la batterie descendre
+            ready_s = minutes * 60 if page == "batterie" else GPS_FIX_S
+            while self.t - self.boot_t < ready_s:
                 self.step()
             if page == "libre":
                 self.window.setProperty("homeIndex", len(self.routes))
             elif page in SCREENS:
                 self.window.setProperty("screen", SCREENS[page])
-        self.model.refresh(self.rider.device_status(self.t - self.boot_t))
+        self.refresh()
 
         def grab():
             self.window.grabWindow().save(path)
@@ -388,6 +449,22 @@ class Compteur:
         # Laisse le temps au changement d'écran et au chargement des tuiles
         QTimer.singleShot(1500, grab)
         self.app.exec()
+
+    def _ride_to_segment(self, page: str) -> None:
+        """Sortie de démo jusqu'à la côte d'essai : son annonce, le passage aux deux tiers, ou son arrivée."""
+        self.session.start(0)
+        self.window.setProperty("screen", "ride")
+        tracker = self.model.tracker
+        reached = {
+            "annonce": lambda: tracker.approach is not None and tracker.approach.distance_m < 200,
+            "segment": lambda: any(effort.along_m > 0.65 * effort.segment.length_m for effort in tracker.active),
+            "segment-fin": lambda: bool(tracker.results),
+        }[page]
+        for _ in range(4 * 3600):
+            if reached():
+                break
+            self.step()
+        self.tick()
 
     def record_intro(self, path: str, frames_dir: str | None = None, fps: int = 25, hold_s: float = 1.5) -> None:
         """Enregistre l'intro en GIF : elle avance image par image, puis ffmpeg assemble les captures."""
