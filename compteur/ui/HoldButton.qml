@@ -25,7 +25,7 @@ Panel {
         anchors.centerIn: parent
         text: button.text
         color: Theme.lacquer
-        font { family: Theme.sans; pixelSize: 20; weight: Font.DemiBold }
+        font { family: Theme.sans; pixelSize: 26; weight: Font.DemiBold }
     }
     // Le même texte en graphite, sur la partie remplie
     Item {
@@ -37,7 +37,7 @@ Panel {
             anchors.verticalCenter: parent.verticalCenter
             text: button.text
             color: Theme.graphite
-            font { family: Theme.sans; pixelSize: 20; weight: Font.DemiBold }
+            font { family: Theme.sans; pixelSize: 26; weight: Font.DemiBold }
         }
     }
 

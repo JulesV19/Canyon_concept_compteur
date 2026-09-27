@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Shapes
 import "Format.js" as Format
 
 // Page tours : le tour en cours en grand (son chrono, qui clignote en pause, sa distance, sa moyenne et son
@@ -14,7 +13,7 @@ Item {
     readonly property var lap: values.lap ?? ({})
     readonly property var laps: ride.laps
     readonly property bool paused: values.state === "paused" || values.autoPaused === true
-    readonly property var columns: [22, 86, 206, 326]  // tour, temps, distance, moyenne
+    readonly property var columns: [22, 90, 214, 330]  // tour, temps, distance, moyenne
 
     // 0 → 1 : entrée du dernier tour fini dans la liste
     property real arrival: 1
@@ -35,20 +34,20 @@ Item {
         y: 8
         text: "Tour " + (page.lap.number ?? 1)
         color: Theme.lacquer
-        font { family: Theme.sans; pixelSize: 22; weight: Font.DemiBold }
+        font { family: Theme.sans; pixelSize: 30; weight: Font.DemiBold }
     }
     Text {
         anchors { left: lapTitle.right; leftMargin: 10; baseline: lapTitle.baseline }
-        text: "en cours"
+        text: "EN COURS"
         color: Theme.ash
-        font { family: Theme.sans; pixelSize: 15; weight: Font.Medium }
+        font { family: Theme.numbers; pixelSize: 22; weight: Font.DemiBold; letterSpacing: 1.5 }
     }
 
     // Chrono du tour, en grand
     Text {
         id: lapTime
         x: 20
-        anchors { baseline: parent.top; baselineOffset: 142 }
+        anchors { baseline: parent.top; baselineOffset: 152 }
         text: Format.duration(page.lap.timerS)
         color: Theme.lacquer
         // En pause, il clignote au rythme des mises à jour : aucune image de plus à dessiner
@@ -59,40 +58,40 @@ Item {
     Row {
         id: lapStats
         x: 24
-        y: 158
+        y: 170
         width: parent.width - 48
 
         Repeater {
             model: [
-                { label: "Distance", value: Format.number(page.lap.distanceKm, 2), unit: "km" },
-                { label: "Moyenne", value: Format.number(page.lap.avgSpeedKmh, 1), unit: "km/h" },
-                { label: "Cardio", value: Format.number(page.lap.avgHeartRate), unit: "bpm" }
+                { label: "DISTANCE", value: Format.number(page.lap.distanceKm, 2), unit: "km" },
+                { label: "MOYENNE", value: Format.number(page.lap.avgSpeedKmh, 1), unit: "km/h" },
+                { label: "CARDIO", value: Format.number(page.lap.avgHeartRate), unit: "bpm" }
             ]
 
             delegate: Item {
                 id: stat
                 required property var modelData
                 width: lapStats.width / 3
-                height: 58
+                height: 80
 
                 Text {
                     text: stat.modelData.label
                     color: Theme.ash
-                    font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
+                    font { family: Theme.numbers; pixelSize: 22; weight: Font.DemiBold; letterSpacing: 1.5 }
                 }
                 Text {
                     id: statValue
-                    anchors { baseline: parent.top; baselineOffset: 48 }
+                    anchors { baseline: parent.top; baselineOffset: 70 }
                     text: stat.modelData.value
                     color: Theme.lacquer
-                    font { family: Theme.numbers; pixelSize: 32; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+                    font { family: Theme.numbers; pixelSize: 44; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
                 }
                 Text {
                     x: statValue.implicitWidth + 5
                     anchors.baseline: statValue.baseline
                     text: stat.modelData.unit
                     color: Theme.ash
-                    font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
+                    font { family: Theme.sans; pixelSize: 20; weight: Font.DemiBold }
                 }
             }
         }
@@ -102,12 +101,12 @@ Item {
     Panel {
         id: history
         x: 16
-        y: 228
+        y: 262
         width: parent.width - 32
         height: lapButton.y - y - 10
 
         Repeater {
-            model: ["Tour", "Temps", "Distance", "Moyenne"]
+            model: ["TOUR", "TEMPS", "DISTANCE", "MOYENNE"]
             delegate: Text {
                 required property int index
                 required property string modelData
@@ -115,19 +114,19 @@ Item {
                 y: 14
                 text: modelData
                 color: Theme.ash
-                font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
+                font { family: Theme.numbers; pixelSize: 20; weight: Font.DemiBold; letterSpacing: 1.5 }
             }
         }
         Rectangle {
             x: 20
-            y: 38
+            y: 46
             width: parent.width - 40
             height: 1
             color: Theme.hairline
         }
         ListView {
             id: lapList
-            y: 39
+            y: 47
             width: parent.width
             height: parent.height - y - 6
             clip: true
@@ -140,7 +139,7 @@ Item {
                 required property var modelData
                 readonly property real entry: index === 0 ? page.arrival : 1
                 width: lapList.width
-                height: 44
+                height: 50
                 opacity: entry
                 transform: Translate { x: (1 - lapRow.entry) * 16 * Theme.lean; y: (1 - lapRow.entry) * 16 }
 
@@ -149,22 +148,26 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: lapRow.modelData.number
                     color: Theme.ash
-                    font { family: Theme.numbers; pixelSize: 22; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+                    font { family: Theme.numbers; pixelSize: 30; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
                 }
                 Text {
                     x: page.columns[1]
                     anchors.verticalCenter: parent.verticalCenter
                     text: Format.duration(lapRow.modelData.timerS)
                     color: Theme.lacquer
-                    font { family: Theme.numbers; pixelSize: 22; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+                    font { family: Theme.numbers; pixelSize: 30; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
                 }
-                Figure {
+                FigureLine {
+                    valueSize: 30
+                    unitSize: 18
                     x: page.columns[2]
                     anchors.verticalCenter: parent.verticalCenter
                     value: Format.number(lapRow.modelData.distanceKm, 2)
                     unit: "km"
                 }
-                Figure {
+                FigureLine {
+                    valueSize: 30
+                    unitSize: 18
                     x: page.columns[3]
                     anchors.verticalCenter: parent.verticalCenter
                     value: Format.number(lapRow.modelData.avgSpeedKmh, 1)
@@ -187,7 +190,7 @@ Item {
             wrapMode: Text.WordWrap
             text: "Aucun tour fini. Le bouton Lap, ou « Nouveau tour » ci-dessous, clôt le tour en cours."
             color: Theme.ash
-            font { family: Theme.sans; pixelSize: 15; weight: Font.Medium }
+            font { family: Theme.sans; pixelSize: 22; weight: Font.DemiBold }
         }
     }
 
@@ -208,32 +211,11 @@ Item {
             anchors.centerIn: parent
             text: "Nouveau tour"
             color: lapTap.pressed ? Theme.graphite : Theme.lacquer
-            font { family: Theme.sans; pixelSize: 22; weight: Font.DemiBold }
+            font { family: Theme.sans; pixelSize: 28; weight: Font.DemiBold }
         }
         TapHandler {
             id: lapTap
             onTapped: page.ride.lap()
-        }
-    }
-
-    // Un chiffre et son unité, sur une ligne
-    component Figure: Row {
-        id: figure
-        property string value
-        property string unit
-        spacing: 4
-
-        Text {
-            id: figureValue
-            text: figure.value
-            color: Theme.lacquer
-            font { family: Theme.numbers; pixelSize: 22; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
-        }
-        Text {
-            anchors.baseline: figureValue.baseline
-            text: figure.unit
-            color: Theme.ash
-            font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
         }
     }
 }

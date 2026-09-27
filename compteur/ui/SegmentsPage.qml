@@ -22,6 +22,13 @@ Item {
         keyboard = true
         focusRow = Math.max(0, Math.min(segments.length - 1, focusRow + delta))
         list.positionViewAtIndex(focusRow, ListView.Contain)
+        snapRows()
+    }
+    // Le défilement se cale sur les lignes (snapMode), mais positionViewAtIndex, lui, ne s'en occupe pas : au clavier,
+    // on recale sur la ligne, sans jamais dépasser la fin de la liste.
+    function snapRows() {
+        const last = list.contentHeight + list.bottomMargin - list.height
+        list.contentY = Math.max(0, Math.min(Math.ceil(list.contentY / list.rowHeight) * list.rowHeight, last))
     }
     function activate() {
         strava.sync()
@@ -70,9 +77,16 @@ Item {
 
         ListView {
             id: list
+            readonly property real rowHeight: 96
             anchors { fill: parent; topMargin: 2; bottomMargin: 2 }
             clip: true
             boundsBehavior: Flickable.StopAtBounds
+            // Le cadre ne fait pas un nombre entier de lignes : sans rien, une ligne reste à cheval sur un bord et le
+            // rognage tranche le nom en plein milieu. La liste se cale donc sur les lignes, et ce qui dépasse devient
+            // une marge sous la dernière : arrivé au bas de la liste, le haut tombe encore juste. Reste, voulue, la
+            // lisière de la ligne suivante en bas du cadre : elle dit qu'il y en a d'autres.
+            snapMode: ListView.SnapToItem
+            bottomMargin: height % rowHeight  // marge du contenu, pas celle des ancres ci-dessus
             model: page.segments
 
             delegate: Item {
@@ -87,8 +101,11 @@ Item {
                     return 1 - Math.pow(1 - x, 3)
                 }
                 width: list.width
-                height: 88
+                height: list.rowHeight
                 opacity: entry
+                // Chaque ligne dans son propre calque : sinon, arrivée en haut du cadre, son dessin déborde
+                // sur le titre et y reste (voir Panel.scrolled).
+                layer.enabled: true
                 transform: Translate { x: (1 - row.entry) * 12 * Theme.lean; y: (1 - row.entry) * 12 }
 
                 Rectangle {
@@ -102,7 +119,7 @@ Item {
                 // Profil en vignette, coloré selon la pente
                 SegmentProfile {
                     x: 20
-                    y: 20
+                    y: 24
                     width: 60
                     height: 48
                     points: row.modelData.profile
@@ -113,24 +130,24 @@ Item {
                 Text {
                     id: segmentName
                     x: 96
-                    y: 17
+                    y: 16
                     width: (row.hasRecord ? record.x : noRecord.x) - x - 12
                     text: row.modelData.name
                     elide: Text.ElideRight
                     color: Theme.lacquer
-                    font { family: Theme.sans; pixelSize: 19; weight: Font.DemiBold }
+                    font { family: Theme.sans; pixelSize: 25; weight: Font.DemiBold }
                 }
                 Text {
                     id: details
                     x: 96
-                    anchors { top: segmentName.bottom; topMargin: 3 }
+                    anchors { top: segmentName.bottom; topMargin: 2 }
                     width: (row.hasCrown ? crownLabel.x : row.width - 22) - x - 12
                     text: Format.number(row.modelData.lengthKm, 1) + " km"
                           + (typeof row.modelData.gradePct === "number"
                              ? " · " + Format.number(row.modelData.gradePct, 1) + " %" : "")
                     elide: Text.ElideRight
                     color: Theme.ash
-                    font { family: Theme.sans; pixelSize: 14; weight: Font.Medium }
+                    font { family: Theme.sans; pixelSize: 19; weight: Font.DemiBold }
                 }
 
                 // Record à droite, le KOM (ou QOM) dessous
@@ -140,7 +157,7 @@ Item {
                     visible: row.hasRecord
                     text: row.hasRecord ? Format.clock(row.modelData.prS) : ""
                     color: Theme.lacquer
-                    font { family: Theme.numbers; pixelSize: 24; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+                    font { family: Theme.numbers; pixelSize: 32; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
                 }
                 Text {
                     id: noRecord
@@ -148,7 +165,7 @@ Item {
                     visible: !row.hasRecord
                     text: "Pas de temps"
                     color: Theme.ash
-                    font { family: Theme.sans; pixelSize: 14; weight: Font.Medium }
+                    font { family: Theme.sans; pixelSize: 19; weight: Font.DemiBold }
                 }
                 Text {
                     id: crownTime
@@ -156,7 +173,7 @@ Item {
                     visible: row.hasCrown
                     text: row.hasCrown ? Format.clock(row.modelData.komS) : ""
                     color: Theme.ash
-                    font { family: Theme.numbers; pixelSize: 17; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+                    font { family: Theme.numbers; pixelSize: 23; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
                 }
                 Text {
                     id: crownLabel
@@ -164,7 +181,7 @@ Item {
                     visible: row.hasCrown
                     text: row.modelData.komLabel
                     color: Theme.ash
-                    font { family: Theme.sans; pixelSize: 12; weight: Font.DemiBold; letterSpacing: 0.5 }
+                    font { family: Theme.numbers; pixelSize: 18; weight: Font.DemiBold; letterSpacing: 1.5 }
                 }
 
                 Rectangle {
@@ -189,7 +206,7 @@ Item {
                 : page.strava.error !== "" ? "Pas encore de segments."
                 : "Aucun segment vélo en favori.\nMets une étoile à un segment sur Strava, puis synchronise."
             color: Theme.ash
-            font { family: Theme.sans; pixelSize: 16; weight: Font.Medium }
+            font { family: Theme.sans; pixelSize: 21; weight: Font.DemiBold }
         }
     }
 
@@ -209,7 +226,7 @@ Item {
             : (count === 0 ? "Aucun segment" : count + (count > 1 ? " segments" : " segment"))
               + " · synchro " + page.strava.syncedText
         color: page.strava.error !== "" ? Theme.danger : Theme.ash
-        font { family: Theme.sans; pixelSize: 15; weight: Font.Medium }
+        font { family: Theme.sans; pixelSize: 19; weight: Font.DemiBold }
     }
 
     // Synchroniser, grisé pendant la synchro
@@ -218,7 +235,7 @@ Item {
         readonly property bool pressed: syncTap.pressed
         readonly property color ink: pressed ? Theme.graphite : Theme.lacquer
         x: 16
-        y: parent.height - height - 18
+        y: parent.height - height - 8
         width: parent.width - 32
         height: 68
         visible: page.connected
@@ -251,7 +268,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: page.syncing ? "Synchro en cours…" : "Synchroniser"
                 color: syncButton.ink
-                font { family: Theme.sans; pixelSize: 20; weight: Font.DemiBold }
+                font { family: Theme.sans; pixelSize: 26; weight: Font.DemiBold }
             }
         }
         TapHandler {

@@ -157,7 +157,7 @@ Item {
         y: profile.plotHeight + 10
         text: "0"
         color: Theme.ash
-        font { family: Theme.sans; pixelSize: 12; weight: Font.Medium }
+        font { family: Theme.sans; pixelSize: 18; weight: Font.DemiBold }
     }
     Text {
         visible: profile.axis && profile.drawable
@@ -165,7 +165,7 @@ Item {
         y: profile.plotHeight + 10
         text: Format.number(profile.lengthKm, 1) + " km"
         color: Theme.ash
-        font { family: Theme.sans; pixelSize: 12; weight: Font.Medium }
+        font { family: Theme.sans; pixelSize: 18; weight: Font.DemiBold }
     }
 
     // Position

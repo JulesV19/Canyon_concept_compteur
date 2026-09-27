@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Shapes
+import "MapGeometry.js" as MapGeometry
 
 // Carte OSM hors ligne : tuiles pré-rendues (image://tiles), parcours, trace et position.
 // Coordonnées « monde » : pixels Web Mercator au zoom 16 (tuiles de 512 px), comptés depuis `origin`.
@@ -41,8 +41,7 @@ Item {
             mapHeading = heading
             return
         }
-        const diff = ((heading - mapHeading) % 360 + 540) % 360 - 180
-        mapHeading = (mapHeading + 0.4 * diff + 360) % 360
+        mapHeading = (mapHeading + 0.4 * MapGeometry.turn(mapHeading, heading) + 360) % 360
         Qt.callLater(map.glide)
     }
     readonly property int tileZoom: Math.max(8, Math.min(16, Math.round(zoom)))
@@ -52,7 +51,6 @@ Item {
     // Position, cap et avancement glissent ensemble, à vitesse constante, pendant un peu plus qu'un pas de mesure :
     // la carte ne s'arrête jamais entre deux mesures et la route reste dans l'axe de la flèche.
     readonly property int glideMs: Math.round(animationMs * 1.1)
-    property string tileKey
 
     // Ce qui est affiché : position, cap de la carte, cap de la flèche et avancement. Ils glissent vers la dernière
     // mesure au rythme d'un minuteur à 25 par seconde, mais ne changent qu'une fois le déplacement visible, d'un pixel
@@ -100,10 +98,6 @@ Item {
             cacheImage.scheduleUpdate()
     }
 
-    // Écart d'angle le plus court, en degrés
-    function turn(from, to) {
-        return ((to - from) % 360 + 540) % 360 - 180
-    }
     function slideOffset() {
         const k = scaleFactor
         const t = -cacheBearing * Math.PI / 180
@@ -173,12 +167,12 @@ Item {
         const pixel = 1 / scaleFactor  // un pixel d'écran, en coordonnées carte
         const x = from.x + (centerX - from.x) * p
         const y = from.y + (centerY - from.y) * p
-        const b = from.bearing + turn(from.bearing, bearing) * p
-        const h = from.heading + turn(from.heading, heading) * p
+        const b = from.bearing + MapGeometry.turn(from.bearing, bearing) * p
+        const h = from.heading + MapGeometry.turn(from.heading, heading) * p
         const d = from.done + (done - from.done) * p
-        const turning = p === 1 || Math.abs(turn(shownBearing, b)) >= bearingStep
+        const turning = p === 1 || Math.abs(MapGeometry.turn(shownBearing, b)) >= bearingStep
         glideProgress = p
-        if (!turning && Math.hypot(x - shownX, y - shownY) < pixel && Math.abs(turn(shownHeading, h)) < 1
+        if (!turning && Math.hypot(x - shownX, y - shownY) < pixel && Math.abs(MapGeometry.turn(shownHeading, h)) < 1
                 && Math.abs(d - shownDone) < pixel)
             return
         shownX = x
@@ -211,45 +205,15 @@ Item {
         zoom = Math.max(12, Math.min(16, Math.round(zoom) + step))
     }
 
-    // Tuiles qui couvrent l'image de la carte, quelle que soit la rotation. On ne touche qu'à celles qui changent.
+    // Tuiles qui couvrent l'image de la carte (voir MapTileLayer)
     function updateTiles() {
-        if (!ready || width <= 0 || height <= 0)
-            return
-        const z = tileZoom
-        const size = 512 * Math.pow(2, 16 - z)
-        const radius = Math.hypot(Math.max(anchorX, width - anchorX) + cacheMargin,
-                                  Math.max(anchorY, height - anchorY) + cacheMargin) / scaleFactor
-        const cx = origin.x + cacheX
-        const cy = origin.y + cacheY
-        const x0 = Math.floor((cx - radius) / size), x1 = Math.floor((cx + radius) / size)
-        const y0 = Math.floor((cy - radius) / size), y1 = Math.floor((cy + radius) / size)
-        const key = [z, x0, x1, y0, y1].join("/")
-        if (key === tileKey)
-            return
-        tileKey = key
-
-        const wanted = {}
-        for (let x = x0; x <= x1; x++)
-            for (let y = y0; y <= y1; y++)
-                wanted[z + "/" + x + "/" + y] = { x: x, y: y }
-        for (let i = tiles.count - 1; i >= 0; i--) {
-            const tile = tiles.get(i)
-            if (tile.key in wanted)
-                delete wanted[tile.key]
-            else if (tile.level === z)
-                tiles.remove(i)
-            else
-                staleTiles.restart()  // autre zoom : gardée le temps que les nouvelles tuiles arrivent
-        }
-        for (const k in wanted)
-            tiles.append({ key: k, level: z, tx: wanted[k].x * size - origin.x, ty: wanted[k].y * size - origin.y, size: size })
+        tileLayer.update()
     }
 
     Component.onCompleted: {
         mapHeading = heading
         ready = true
         place()
-        syncTrackChunks()
     }
     onScaleFactorChanged: {
         keepCache()
@@ -269,56 +233,13 @@ Item {
     // Avancement dessiné : il glisse avec la carte, et le creux du parcours avance sous la flèche sans à-coups
     readonly property real shownProgress: routeLength > 0 ? shownDone / routeLength : 0
 
-    // Le parcours en tronçons de 100 points, chacun avec sa position le long du tracé. Deux tronçons voisins
-    // partagent un point : leurs bouts arrondis se recouvrent, et le trait paraît continu.
-    readonly property var routeChunks: {
-        const chunks = []
-        let start = 0
-        for (let i = 0; i + 1 < route.length; i += 100) {
-            const points = route.slice(i, i + 101)
-            let length = 0
-            for (let k = 1; k < points.length; k++)
-                length += Math.hypot(points[k].x - points[k - 1].x, points[k].y - points[k - 1].y)
-            chunks.push({ points: points, start: start, length: length })
-            start += length
-        }
-        return chunks
-    }
+    // Le parcours en tronçons (voir MapGeometry.routeChunks)
+    readonly property var routeChunks: MapGeometry.routeChunks(route)
     readonly property real routeLength: {
         const last = routeChunks[routeChunks.length - 1]
         return last ? last.start + last.length : 0
     }
 
-    // Sortie libre : les tronçons finis de la trace, ajoutés un à un. Chacun lit ses points une seule fois (trackChunk) :
-    // un tronçon qui arrive ne fait ni relire ni redessiner les autres.
-    ListModel { id: finishedTrack }
-    onTrackChunkCountChanged: syncTrackChunks()
-    function syncTrackChunks() {
-        if (trackChunkCount < finishedTrack.count)
-            finishedTrack.clear()
-        for (let i = finishedTrack.count; i < trackChunkCount; i++)
-            finishedTrack.append({ chunk: i })
-    }
-    // Tronçon en cours, sans son dernier point : le bout de la trace le rejoint en glissant avec la carte
-    readonly property var recentTrack: trackRecent.length > 1 ? trackRecent.slice(0, -1) : []
-    readonly property var trackTip: {
-        const n = trackRecent.length
-        if (n === 0)
-            return []
-        return [trackRecent[Math.max(0, n - 2)], live ? Qt.point(shownX, shownY) : trackRecent[n - 1]]
-    }
-
-    ListModel { id: tiles }
-
-    Timer {
-        id: staleTiles
-        interval: 800
-        onTriggered: {
-            for (let i = tiles.count - 1; i >= 0; i--)
-                if (tiles.get(i).level !== map.tileZoom)
-                    tiles.remove(i)
-        }
-    }
 
     // Terres, le temps que les tuiles arrivent
     Rectangle {
@@ -339,7 +260,7 @@ Item {
             id: cacheContent
             anchors.fill: parent
 
-            World {
+            MapWorld {
                 x: map.cacheMargin + map.anchorX
                 y: map.cacheMargin + map.anchorY
                 rotation: -map.cacheBearing
@@ -347,53 +268,12 @@ Item {
                 lookY: map.cacheY
                 zoomScale: map.scaleFactor
 
-                Repeater {
-                    model: tiles
-                    delegate: Image {
-                        required property string key
-                        required property int level
-                        required property real tx
-                        required property real ty
-                        required property real size
-                        x: tx
-                        y: ty
-                        z: level === map.tileZoom ? 1 : 0
-                        width: size
-                        height: size
-                        source: "image://tiles/" + key
-                        sourceSize: Qt.size(512, 512)
-                        asynchronous: true
-                        smooth: true
-                        opacity: status === Image.Ready ? 1 : 0
-                        Behavior on opacity { NumberAnimation { duration: 200 } }
-                        onOpacityChanged: map.tilesShown++
-                        Component.onDestruction: map.tilesShown++
-                    }
+                MapTileLayer {
+                    id: tileLayer
+                    view: map
                 }
 
-                // Parcours prévu : un trait de laque avec un liseré graphite, comme les tracés de l'accueil. En
-                // tronçons, pour que seuls ceux dans l'image soient dessinés : tous les liserés d'abord, puis la laque,
-                // pour que les raccords ne se voient pas.
-                Repeater {
-                    model: map.routeChunks
-                    delegate: TrackLine {
-                        required property var modelData
-                        z: 2
-                        points: modelData.points
-                        stroke: Theme.graphite
-                        thickness: 12 / map.scaleFactor
-                    }
-                }
-                Repeater {
-                    model: map.routeChunks
-                    delegate: TrackLine {
-                        required property var modelData
-                        z: 2.1
-                        points: modelData.points
-                        stroke: Theme.lacquer
-                        thickness: 7 / map.scaleFactor
-                    }
-                }
+                MapRoute { view: map }
             }
         }
         // Leur image, figée : refaite seulement quand ce qu'elle montre change (voir cacheState)
@@ -409,7 +289,7 @@ Item {
         }
 
         // Par-dessus, dessiné quand ça change : ce qui avance avec soi
-        World {
+        MapWorld {
             x: map.cacheMargin + map.anchorX
             y: map.cacheMargin + map.anchorY
             rotation: -map.cacheBearing
@@ -417,108 +297,14 @@ Item {
             lookY: map.cacheY
             zoomScale: map.scaleFactor
 
-            // Derrière soi, le parcours se creuse : ce qui est fait reste lisible sans voler la vedette.
-            // Le creux suit le parcours lui-même, pas la trace GPS, pour rester bien centré. Seul le tronçon
-            // où l'on roule se redessine ; les autres sont pleins ou vides.
-            Repeater {
-                model: map.routeChunks
-                delegate: Shape {
-                    id: routeChunk
-                    required property var modelData
-                    readonly property real reached: Math.max(0, Math.min(1,
-                        (map.shownDone - modelData.start) / Math.max(modelData.length, 1e-6)))
-                    visible: reached > 0
-                    preferredRendererType: Shape.CurveRenderer
-                    ShapePath {
-                        strokeColor: Theme.graphite
-                        strokeWidth: 3 / map.scaleFactor
-                        fillColor: "transparent"
-                        capStyle: ShapePath.RoundCap
-                        joinStyle: ShapePath.RoundJoin
-                        trim.end: routeChunk.reached
-                        PathPolyline { path: routeChunk.modelData.points }
-                    }
-                }
-            }
+            MapRouteDone { view: map }
 
-            // Sortie libre : la trace se dessine en laque derrière soi, avec un liseré graphite. Tous les liserés
-            // d'abord, puis la laque : les raccords entre tronçons ne se voient pas.
-            Item {
-                visible: map.route.length === 0
-
-                Repeater {
-                    model: finishedTrack
-                    delegate: TrackLine {
-                        required property int chunk
-                        points: map.trackChunk(chunk)
-                        stroke: Theme.graphite
-                        thickness: 12 / map.scaleFactor
-                    }
-                }
-                TrackLine { points: map.recentTrack; stroke: Theme.graphite; thickness: 12 / map.scaleFactor }
-                TrackLine { points: map.trackTip; stroke: Theme.graphite; thickness: 12 / map.scaleFactor }
-                Repeater {
-                    model: finishedTrack
-                    delegate: TrackLine {
-                        required property int chunk
-                        points: map.trackChunk(chunk)
-                        stroke: Theme.lacquer
-                        thickness: 7 / map.scaleFactor
-                    }
-                }
-                TrackLine { points: map.recentTrack; stroke: Theme.lacquer; thickness: 7 / map.scaleFactor }
-                TrackLine { points: map.trackTip; stroke: Theme.lacquer; thickness: 7 / map.scaleFactor }
-            }
+            // Sortie libre : la trace derrière soi
+            MapFreeTrack { view: map }
         }
     }
 
-    // Position : le « Ʌ » du logo, redressé, pointé dans le sens de la marche. Son disque graphite
-    // le détache du parcours en laque ; en roulant, un halo respire autour.
-    Item {
-        id: puck
-        width: 48
-        height: 48
-        x: map.anchorX - width / 2
-        y: map.anchorY - height / 2
-        rotation: map.shownHeading - map.shownBearing
-
-        Rectangle {
-            anchors.centerIn: parent
-            width: 48
-            height: 48
-            radius: 24
-            color: Theme.lacquer
-            opacity: 0.16
-            // Par pas d'un pixel sur le rayon : entre deux, rien à redessiner
-            scale: map.live && map.animated ? Math.round((0.9 - 0.2 * Math.cos(2 * Math.PI * map.breath)) * 24) / 24 : 1
-        }
-        Rectangle {
-            anchors.centerIn: parent
-            width: 34
-            height: 34
-            radius: 17
-            color: Theme.graphite
-            border { color: Theme.lacquer; width: 2 }
-        }
-        Shape {
-            anchors.centerIn: parent
-            width: 20
-            height: 19
-            preferredRendererType: Shape.CurveRenderer
-            ShapePath {
-                fillColor: Theme.lacquer
-                strokeColor: "transparent"
-                startX: 8.5; startY: 0
-                PathLine { x: 11.5; y: 0 }
-                PathLine { x: 20; y: 19 }
-                PathLine { x: 15; y: 19 }
-                PathLine { x: 10; y: 7.5 }
-                PathLine { x: 5; y: 19 }
-                PathLine { x: 0; y: 19 }
-                PathLine { x: 8.5; y: 0 }
-            }
-        }
-    }
+    MapPuck { view: map }
 
     // Pincer pour zoomer
     PinchHandler {
@@ -527,43 +313,5 @@ Item {
         property real startZoom: 16
         onActiveChanged: if (active) startZoom = map.zoom
         onActiveScaleChanged: if (active) map.zoom = Math.max(12, Math.min(16.5, startZoom + Math.log2(activeScale)))
-    }
-
-    // Le monde vu depuis un point de la carte (lookX, lookY) : placé là où ce point doit tomber, il tourne autour de
-    // lui, à l'échelle du zoom. Ce qu'on y met est en coordonnées carte.
-    component World: Item {
-        id: world
-        default property alias content: inner.data
-        property real lookX
-        property real lookY
-        property real zoomScale: 1
-
-        Item {
-            scale: world.zoomScale
-            transformOrigin: Item.TopLeft
-
-            Item {
-                id: inner
-                x: -world.lookX
-                y: -world.lookY
-            }
-        }
-    }
-
-    // Un trait : tronçon du parcours ou de la trace
-    component TrackLine: Shape {
-        id: line
-        property var points: []
-        property color stroke
-        property real thickness
-        preferredRendererType: Shape.CurveRenderer
-        ShapePath {
-            strokeColor: line.stroke
-            strokeWidth: line.thickness
-            fillColor: "transparent"
-            capStyle: ShapePath.RoundCap
-            joinStyle: ShapePath.RoundJoin
-            PathPolyline { path: line.points }
-        }
     }
 }

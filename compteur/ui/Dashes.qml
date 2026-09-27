@@ -6,6 +6,7 @@ Row {
     id: dashes
     property int count
     property int currentIndex
+    property bool dark: false  // sur fond clair (page CarPlay)
     spacing: 6
 
     Repeater {
@@ -19,7 +20,8 @@ Row {
             Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
             preferredRendererType: Shape.CurveRenderer
             ShapePath {
-                fillColor: dash.active ? Theme.lacquer : Qt.rgba(Theme.ash.r, Theme.ash.g, Theme.ash.b, 0.45)
+                fillColor: dashes.dark ? (dash.active ? "#CC000000" : "#40000000")
+                    : dash.active ? Theme.lacquer : Qt.rgba(Theme.ash.r, Theme.ash.g, Theme.ash.b, 0.45)
                 strokeColor: "transparent"
                 startX: 0; startY: 0
                 PathLine { x: dash.width - 2; y: 0 }

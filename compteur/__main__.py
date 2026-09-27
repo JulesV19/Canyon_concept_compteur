@@ -19,14 +19,17 @@ def main() -> None:
     parser.add_argument("--screenshot", metavar="FICHIER.png",
                         help="capture de l'écran (sans fenêtre), puis quitte")
     parser.add_argument("--page", choices=["accueil", "libre", "menu", "sorties", "segments", "reglages", "batterie", "gps",
-                                           "principale",
-                                           "carte", "altitude", "cardio", "tours", "resume", "annonce", "segment",
+                                           "carplay", "carplay-musique", "carplay-telephone", "carplay-messages",
+                                           "carplay-whatsapp", "carplay-conversation", "carplay-groupe", "carplay-appel",
+                                           "carplay-message", "principale",
+                                           "carte", "altitude", "cardio", "tours", "carplay-sortie", "resume", "annonce", "segment",
                                            "segment-fin"],
                         default="principale",
                         help="écran à capturer : accueil (libre : sur la carte Sortie libre), menu, Mes sorties, "
-                             "Segments Strava, réglages, batterie (après --minutes de mise en route), GPS, page de sortie après une sortie simulée (principale, carte, "
-                             "altitude, "
-                             "cardio, tours), son résumé (resume), ou la côte d'essai : son annonce, le passage en "
+                             "Segments Strava, réglages, batterie (après --minutes de mise en route), GPS, CarPlay (avec un iPhone "
+                             "simulé ; carplay-musique, -telephone, -messages, -whatsapp, -conversation, -groupe : ses applis ; "
+                             "carplay-appel, -message : ses bandeaux sur la page principale), page de sortie après une sortie simulée (principale, carte, altitude, cardio, "
+                             "tours, carplay-sortie), son résumé (resume), ou la côte d'essai : son annonce, le passage en "
                              "cours (segment), son arrivée (segment-fin)")
     parser.add_argument("--minutes", type=float, default=51,
                         help="durée de la sortie simulée avant la capture ou la mesure")

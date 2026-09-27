@@ -2,15 +2,17 @@ import QtQuick
 import QtQuick.Shapes
 import "Format.js" as Format
 
-// Menu de l'accueil : Mes sorties, Segments Strava, Réglages, et Éteindre, à maintenir pour éviter une fausse
+// Menu de l'accueil : Mes sorties, Segments Strava, CarPlay, Réglages, et Éteindre, à maintenir pour éviter une fausse
 // manœuvre. Au clavier : ↑ ↓ pour choisir, Entrée ou → pour ouvrir.
 Item {
     id: page
     required property var history  // HistoryModel : sorties enregistrées
     required property var strava   // StravaModel : segments en favori
+    required property var phone    // PhoneModel : l'iPhone, pour CarPlay
     signal back
     signal ridesRequested
     signal segmentsRequested
+    signal carPlayRequested
     signal settingsRequested
     signal powerOffRequested
 
@@ -22,7 +24,7 @@ Item {
 
     function moveFocus(delta) {
         keyboard = true
-        focusRow = (focusRow + delta + 3) % 3
+        focusRow = (focusRow + delta + 4) % 4
     }
     function activate() {
         keyboard = true
@@ -30,6 +32,8 @@ Item {
             ridesRequested()
         else if (focusRow === 1)
             segmentsRequested()
+        else if (focusRow === 2)
+            carPlayRequested()
         else
             settingsRequested()
     }
@@ -58,7 +62,7 @@ Item {
         x: 16
         y: header.height + 4
         width: parent.width - 32
-        height: 3 * 100 + 2
+        height: 4 * 92 + 3
 
         Column {
             anchors.fill: parent
@@ -114,12 +118,28 @@ Item {
 
             MenuRow {
                 width: panel.width
-                label: "Réglages"
-                hint: "FC max, auto-pause, luminosité, batterie, GPS"
+                label: "CarPlay"
+                hint: !page.phone.values.available ? "Bluetooth indisponible"
+                    : page.phone.values.connected ? page.phone.values.name + " connecté"
+                    : "Aucun iPhone connecté"
                 focused: page.keyboard && page.focusRow === 2
                 onTapped: {
                     page.keyboard = false
                     page.focusRow = 2
+                    page.carPlayRequested()
+                }
+            }
+
+            Separator {}
+
+            MenuRow {
+                width: panel.width
+                label: "Réglages"
+                hint: "FC max, auto-pause, luminosité, batterie, GPS"
+                focused: page.keyboard && page.focusRow === 3
+                onTapped: {
+                    page.keyboard = false
+                    page.focusRow = 3
                     page.settingsRequested()
                 }
             }
@@ -134,7 +154,7 @@ Item {
         wrapMode: Text.WordWrap
         text: "Impossible d'éteindre : " + page.powerError
         color: Theme.danger
-        font { family: Theme.sans; pixelSize: 15; weight: Font.DemiBold }
+        font { family: Theme.sans; pixelSize: 20; weight: Font.DemiBold }
     }
 
     HoldButton {
@@ -161,7 +181,7 @@ Item {
         property string hint
         property bool focused    // choisie au clavier : un trait laque sur le bord gauche
         signal tapped
-        height: 100
+        height: 92
 
         Rectangle {
             anchors.fill: parent
@@ -178,10 +198,10 @@ Item {
         Text {
             id: rowLabel
             x: 24
-            y: 24
+            y: 20
             text: row.label
             color: Theme.lacquer
-            font { family: Theme.sans; pixelSize: 21; weight: Font.DemiBold }
+            font { family: Theme.sans; pixelSize: 28; weight: Font.DemiBold }
         }
         Text {
             x: 24
@@ -190,7 +210,7 @@ Item {
             text: row.hint
             elide: Text.ElideRight
             color: Theme.ash
-            font { family: Theme.sans; pixelSize: 15; weight: Font.Medium }
+            font { family: Theme.sans; pixelSize: 20; weight: Font.DemiBold }
         }
         Shape {
             x: row.width - 24 - width

@@ -28,9 +28,10 @@ const ASSETS = 'https://protomaps.github.io/basemaps-assets';
 const RATIO = 2;
 const TILE = 256;
 
-// Toute la région jusqu'au zoom 12, zooms 13 à 16 autour des parcours (quelques minutes).
-// Pour rouler n'importe où sans parcours : REGION_ZOOMS = [8, 16] (bien plus long).
-const REGION_ZOOMS = [8, 12];
+// Toute la région à tous les zooms : on roule n'importe où, pas seulement le long des parcours. Relevé le
+// 22/09/2026 : 159 769 tuiles, 1,5 Go, 12 minutes sur le Mac. Pour une carte bien plus légère, autour des parcours
+// seulement : REGION_ZOOMS = [8, 12], les zooms 13 à 16 venant alors de ROUTE_ZOOMS (9 202 tuiles, 123 Mo).
+const REGION_ZOOMS = [8, 16];
 const ROUTE_ZOOMS = [13, 16];
 const ROUTE_BUFFER_M = 3000;
 

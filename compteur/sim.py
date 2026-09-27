@@ -149,3 +149,111 @@ def gps_status(t: float, sample: Sample) -> Status:
                   satellites=len(used), in_view=len(sky), hdop=0.8, quality=2, fix_type=3, pdop=1.5, vdop=1.2,
                   used=used, sky=sky)
     return Status(fix, present=True, age_s=age, first_fix_s=GPS_FIX_S if found else None)
+
+
+# iPhone simulé, pour la page CarPlay sur le Mac : un morceau qui avance, quelques messages et appels, et sur demande
+# un appel entrant (qui finit en appel manqué sans réponse) ou un nouveau message
+DEMO_TRACKS = [("Instant Crush", "Daft Punk", "Random Access Memories", 337.0),
+               ("Midnight City", "M83", "Hurry Up, We're Dreaming", 244.0),
+               ("Tadow", "Masego & FKJ", "Tadow", 301.0)]
+DEMO_RING_S = 25.0  # un appel entrant sonne 25 s, puis devient un appel manqué
+
+
+class SimulatedPhone:
+    """Même interface que `iphone.Link` (commandes de musique, actions sur les notifications), sans Bluetooth."""
+
+    def __init__(self, phone, clock=None):
+        from . import iphone
+        self.iphone = iphone
+        self.phone = phone
+        self.clock = clock or phone.clock
+        self.uid = 0
+        self.track = 0
+        self.ring_started: float | None = None
+        now = datetime.now()
+        phone.connection(True, "iPhone")
+        self._play(0, playing=True, elapsed=42.0)
+        phone.music_update(iphone.PLAYER, iphone.PLAYER_VOLUME, "0.6")
+        phone.music_update(iphone.QUEUE, iphone.QUEUE_REPEAT, "2")
+        phone.battery(76)
+        self._add("messages", "social", "Papa", "Bien rentré ? Appelle ta mère 😉", now - timedelta(days=1, hours=2),
+                  pre_existing=True)
+        self._add("phone", "missed_call", "Maman", "", now - timedelta(hours=3), pre_existing=True)
+        self._add("whatsapp", "social", "Sortie du dimanche", "Départ 8 h 30 au parking du stade, 90 km",
+                  now - timedelta(hours=1, minutes=2), subtitle="Thomas")
+        self._add("whatsapp", "social", "Sortie du dimanche", "Je prends les gels pour tout le monde", now - timedelta(hours=1),
+                  subtitle="Camille")
+        self._add("messages", "social", "Léa", "Tu rentres vers quelle heure ?", now - timedelta(minutes=12))
+        self._add("messages", "social", "Léa", "On dîne chez Camille ce soir 🍝", now - timedelta(minutes=11))
+        self._add("phone", "missed_call", "Thomas Girard", "", now - timedelta(minutes=30))
+
+    def _add(self, kind: str, category: str, title: str, message: str, date: datetime, subtitle: str = "",
+             pre_existing: bool = False, positive: str = "", negative: str = ""):
+        self.uid += 1
+        app = next(app for app, value in self.iphone.APPS.items() if value == kind)
+        item = self.iphone.Notification(self.uid, app, kind, category, title, subtitle, message, date, positive,
+                                        negative, pre_existing)
+        self.phone.notification(item)
+        return item
+
+    def _play(self, track: int, playing: bool, elapsed: float = 0.0) -> None:
+        iphone = self.iphone
+        self.track = track % len(DEMO_TRACKS)
+        title, artist, album, duration = DEMO_TRACKS[self.track]
+        self.phone.music_update(iphone.PLAYER, iphone.PLAYER_NAME, "Musique")
+        for attribute, value in ((iphone.TRACK_TITLE, title), (iphone.TRACK_ARTIST, artist),
+                                 (iphone.TRACK_ALBUM, album), (iphone.TRACK_DURATION, f"{duration}")):
+            self.phone.music_update(iphone.TRACK, attribute, value)
+        self._playback(playing, elapsed)
+
+    def _playback(self, playing: bool, elapsed: float) -> None:
+        self.phone.music_update(self.iphone.PLAYER, self.iphone.PLAYER_PLAYBACK,
+                                f"{int(playing)},{1.0 if playing else 0.0},{elapsed}")
+
+    def music_command(self, name: str) -> None:
+        music = self.phone.snapshot().music
+        position = music.position(self.clock())
+        if name in ("toggle", "play", "pause"):
+            playing = not music.playing if name == "toggle" else name == "play"
+            self._playback(playing, position)
+        elif name == "next":
+            self._play(self.track + 1, music.playing)
+        elif name == "previous":
+            self._play(self.track - (0 if position > 3 else 1), music.playing)
+        elif name in ("shuffle", "repeat"):
+            attribute = self.iphone.QUEUE_SHUFFLE if name == "shuffle" else self.iphone.QUEUE_REPEAT
+            mode = (music.shuffle if name == "shuffle" else music.repeat) + 1
+            # L'aléatoire n'a que deux états dans Musique (non, tout) ; la répétition en a trois (non, tout, un)
+            mode = {"shuffle": {1: 2, 3: 0}, "repeat": {3: 0}}[name].get(mode, mode)
+            self.phone.music_update(self.iphone.QUEUE, attribute, f"{mode}")
+        elif name in ("volume_up", "volume_down"):
+            volume = min(1.0, max(0.0, music.volume + (0.0625 if name == "volume_up" else -0.0625)))
+            self.phone.music_update(self.iphone.PLAYER, self.iphone.PLAYER_VOLUME, f"{volume}")
+
+    def notification_action(self, uid: int, positive: bool) -> None:
+        """Décrocher ou refuser : l'appel cesse de sonner (refusé, il reste un appel reçu, comme sur l'iPhone)."""
+        ringing = self.iphone.ringing(self.phone.snapshot())
+        if ringing is not None and ringing.uid == uid:
+            self.ring_started = None
+            self.phone.removed(uid)
+
+    def ring(self, name: str = "Léa") -> None:
+        self._add("phone", "incoming_call", name, "Appel entrant", datetime.now(), positive="Accepter",
+                  negative="Refuser")
+        self.ring_started = self.clock()
+
+    def message(self, kind: str = "messages", name: str = "Léa", text: str = "J'arrive dans 10 min !") -> None:
+        self._add(kind, "social", name, text, datetime.now())
+
+    def step(self) -> None:
+        """À chaque seconde : l'appel sans réponse devient un appel manqué, le morceau fini passe au suivant."""
+        now = self.clock()
+        state = self.phone.snapshot()
+        ringing = self.iphone.ringing(state)
+        if ringing is not None and self.ring_started is not None and now - self.ring_started >= DEMO_RING_S:
+            self.ring_started = None
+            self.phone.removed(ringing.uid)
+            self._add("phone", "missed_call", ringing.title, "", datetime.now())
+        music = state.music
+        if music.playing and music.duration and music.position(now) >= music.duration:
+            self._play(self.track + 1, True)

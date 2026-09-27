@@ -9,6 +9,8 @@ Item {
     property bool numeric: true
     property color valueColor: Theme.lacquer
     property bool edge: true  // filet à droite (pas sur la dernière colonne)
+    property int valueSize: 34  // chiffres ; un mot est un peu plus petit
+    property int wordSize: 24
 
     Text {
         x: 16
@@ -17,16 +19,16 @@ Item {
         text: tile.label
         elide: Text.ElideRight
         color: Theme.ash
-        font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
+        font { family: Theme.numbers; pixelSize: 18; weight: Font.DemiBold; letterSpacing: 1.5; capitalization: Font.AllUppercase }
     }
     Text {
         id: tileValue
         x: 16
-        anchors { baseline: parent.top; baselineOffset: 47 }
+        anchors { baseline: parent.top; baselineOffset: 54 }
         text: tile.value
         color: tile.valueColor
         font.family: tile.numeric ? Theme.numbers : Theme.sans
-        font.pixelSize: tile.numeric ? 26 : 19
+        font.pixelSize: tile.numeric ? tile.valueSize : tile.wordSize
         font.weight: Font.DemiBold
         font.italic: tile.numeric
         font.features: ({ "tnum": 1 })
@@ -37,7 +39,7 @@ Item {
         visible: tile.value !== "--"
         text: tile.unit
         color: Theme.ash
-        font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
+        font { family: Theme.sans; pixelSize: 18; weight: Font.DemiBold }
     }
     SlantRule {
         visible: tile.edge

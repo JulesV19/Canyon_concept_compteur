@@ -16,7 +16,7 @@ Panel {
         anchors { left: parent.left; right: parent.right; top: parent.top; leftMargin: 24; rightMargin: 24 + card.cutX; topMargin: 18 }
         text: "Sortie libre"
         color: Theme.lacquer
-        font { family: Theme.sans; pixelSize: 22; weight: Font.DemiBold }
+        font { family: Theme.sans; pixelSize: 28; weight: Font.DemiBold }
     }
 
     BikeLine {
@@ -31,9 +31,9 @@ Panel {
 
     Text {
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom; leftMargin: 24; rightMargin: 24; bottomMargin: 22 }
-        text: "Sans parcours : ta trace s'affiche sur la carte."
+        text: "Ta trace s'affiche sur la carte."
         color: Theme.ash
         wrapMode: Text.WordWrap
-        font { family: Theme.sans; pixelSize: 16; weight: Font.Medium }
+        font { family: Theme.sans; pixelSize: 20; weight: Font.DemiBold }
     }
 }

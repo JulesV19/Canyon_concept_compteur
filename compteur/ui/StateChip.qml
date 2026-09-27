@@ -9,7 +9,7 @@ Item {
     property bool charging
     readonly property real slant: Theme.lean * height
     width: chipRow.implicitWidth + 2 * slant + 12
-    height: 26
+    height: 32
 
     Shape {
         anchors.fill: parent
@@ -45,7 +45,7 @@ Item {
         Text {
             text: chip.text
             color: Theme.lacquer
-            font { family: Theme.sans; pixelSize: 15; weight: Font.DemiBold }
+            font { family: Theme.sans; pixelSize: 20; weight: Font.DemiBold }
             anchors.verticalCenter: parent.verticalCenter
         }
     }

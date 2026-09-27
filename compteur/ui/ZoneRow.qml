@@ -11,22 +11,22 @@ Item {
     property real longest
     property real total
     property real grow: 1     // 0 → 1 : la barre s'allonge
-    readonly property real barSpace: width - 36 - 130
+    readonly property real barSpace: width - 42 - 180
     width: parent ? parent.width : 0
-    height: 28
+    height: 29
 
     Text {
         anchors.verticalCenter: parent.verticalCenter
         text: "Z" + (row.zone + 1)
         color: Theme.ash
-        font { family: Theme.sans; pixelSize: 14; weight: Font.DemiBold }
+        font { family: Theme.numbers; pixelSize: 22; weight: Font.DemiBold }
     }
     Shape {
         id: bar
-        x: 36
+        x: 42
         anchors.verticalCenter: parent.verticalCenter
         width: Math.max(8, row.barSpace * row.seconds / Math.max(row.longest, 1) * row.grow)
-        height: 12
+        height: 14
         visible: row.seconds > 0
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
@@ -40,15 +40,15 @@ Item {
         }
     }
     Text {
-        anchors { right: parent.right; rightMargin: 46; verticalCenter: parent.verticalCenter }
+        anchors { right: parent.right; rightMargin: 62; verticalCenter: parent.verticalCenter }
         text: Format.duration(row.seconds)
         color: Theme.lacquer
-        font { family: Theme.numbers; pixelSize: 20; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+        font { family: Theme.numbers; pixelSize: 28; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
     }
     Text {
         anchors { right: parent.right; verticalCenter: parent.verticalCenter }
         text: row.total > 0 ? Math.round(row.seconds / row.total * 100) + " %" : "--"
         color: Theme.ash
-        font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
+        font { family: Theme.sans; pixelSize: 20; weight: Font.DemiBold }
     }
 }

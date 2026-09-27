@@ -1,0 +1,21 @@
+singleton CarTheme 1.0 CarTheme.qml
+CarPlayPage 1.0 CarPlayPage.qml
+CarStatusBar 1.0 CarStatusBar.qml
+CarHome 1.0 CarHome.qml
+CarConnect 1.0 CarConnect.qml
+AppIcon 1.0 AppIcon.qml
+CarGlyph 1.0 CarGlyph.qml
+CarBackButton 1.0 CarBackButton.qml
+NowPlaying 1.0 NowPlaying.qml
+CarAvatar 1.0 CarAvatar.qml
+CarNavBar 1.0 CarNavBar.qml
+RecentsList 1.0 RecentsList.qml
+ConversationList 1.0 ConversationList.qml
+Conversation 1.0 Conversation.qml
+CallBanner 1.0 CallBanner.qml
+MessageBanner 1.0 MessageBanner.qml
+CarTap 1.0 CarTap.qml
+CompteurIcon 1.0 CompteurIcon.qml
+CarWidget 1.0 CarWidget.qml
+MusicWidget 1.0 MusicWidget.qml
+MessageWidget 1.0 MessageWidget.qml

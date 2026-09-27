@@ -118,8 +118,8 @@ def test_avancement_dessine_sur_la_carte():
 
 
 def test_trace_par_troncons(monkeypatch):
-    monkeypatch.setattr("compteur.model.TRACK_CHUNK", 10)
-    monkeypatch.setattr("compteur.model.TRACK_TOLERANCE", 0)  # tous les points (voir test_trace_allegee)
+    monkeypatch.setattr("compteur.model.ride.TRACK_CHUNK", 10)
+    monkeypatch.setattr("compteur.model.ride.TRACK_TOLERANCE", 0)  # tous les points (voir test_trace_allegee)
     model = RideModel(Ride())
     finished = []
     model.trackChunksChanged.connect(lambda: finished.append(model.trackChunkCount))
@@ -241,7 +241,7 @@ def test_trace_allegee_sans_que_ca_se_voie():
 
 
 def test_troncons_allegés_et_raccordes(monkeypatch):
-    monkeypatch.setattr("compteur.model.TRACK_CHUNK", 10)
+    monkeypatch.setattr("compteur.model.ride.TRACK_CHUNK", 10)
     model = RideModel(Ride())
     model.startPause()
     for t in range(1, 40):  # tout droit vers le nord : chaque tronçon fini se réduit à ses deux bouts

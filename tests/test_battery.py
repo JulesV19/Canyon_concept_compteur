@@ -1,7 +1,7 @@
 import pytest
 
-from compteur.battery import (ADDRESS, CRATE, MODE, SOC, STATUS, VCELL, Gauge, Monitor, Reading, Supply, SupplySensors,
-                              Trend, decode, outlook)
+from compteur.battery import (ADDRESS, CRATE, HIBRT, MODE, SOC, STATUS, VCELL, Gauge, Monitor, Reading, Supply,
+                              SupplySensors, Trend, decode, outlook)
 
 
 def test_registres_en_valeurs():
@@ -20,11 +20,16 @@ class FakeBus:
     def __init__(self, registers):
         self.registers = registers
         self.closed = False
+        self.written = []
 
     def transfer(self, address, write=b"", read=0):
-        assert address == ADDRESS and read == 2
+        assert address == ADDRESS
         if self.registers is None:
             raise OSError("pas de réponse")
+        if read == 0:  # écriture d'un registre
+            self.written.append((write[0], int.from_bytes(write[1:], "big")))
+            return b""
+        assert read == 2
         return self.registers[write[0]]
 
     def close(self):
@@ -39,6 +44,24 @@ def test_lecture_sur_le_bus():
     assert reading.percent == 50.0
     assert reading.voltage == pytest.approx(3.64)
     assert reading.hibernating
+
+
+def test_jauge_reveillee_des_qu_elle_est_trouvee():
+    """En veille la jauge ne mesure que toutes les 45 s : on met ses seuils de veille à zéro en la trouvant."""
+    bus = FakeBus(REGISTERS)
+    Gauge(bus).wake()
+    assert bus.written == [(HIBRT, 0)]
+
+    class Sensors:
+        def read(self):
+            return Supply()
+
+    bus = FakeBus(REGISTERS)
+    monitor = Monitor(lambda: bus, Sensors(), clock=lambda: 0.0)
+    monitor.poll()
+    assert bus.written == [(HIBRT, 0)]  # réveillée une seule fois, à la découverte
+    monitor.poll()
+    assert bus.written == [(HIBRT, 0)]
 
 
 def test_jauge_cherchee_trouvee_puis_perdue():

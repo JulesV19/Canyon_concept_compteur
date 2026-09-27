@@ -66,7 +66,7 @@ def describe(error: BaseException) -> str:
 
 class Writer:
     """Fil d'écriture : les tâches passent une à une, dans l'ordre où on les confie. Une tâche qui échoue n'arrête pas
-    le fil. `post(fonction)` doit faire appeler la fonction sur le fil de l'interface (voir app.py) : c'est là qu'arrive
+    le fil. `post(fonction)` doit faire appeler la fonction sur le fil de l'interface (voir relay.py) : c'est là qu'arrive
     le résultat de chaque tâche."""
 
     def __init__(self, post: Callable[[Callable[[], None]], None], name: str = "ecriture"):

@@ -19,6 +19,7 @@ VCELL = 0x02    # tension, 78,125 µV par unité
 SOC = 0x04      # charge : l'octet haut en %, l'octet bas en 1/256 de %
 MODE = 0x06     # bit HibStat : la jauge est en veille
 VERSION = 0x08  # 0x001X
+HIBRT = 0x0A    # seuils d'entrée et de sortie de veille ; à zéro, la jauge ne dort plus
 CRATE = 0x16    # vitesse de charge (> 0) ou de décharge (< 0), 0,208 %/h par unité, signée
 STATUS = 0x1A   # alertes, dans l'octet haut
 HIB_STAT = 0x1000  # MODE : en veille, la jauge ne mesure plus que toutes les 45 s (la charge bouge peu)
@@ -67,6 +68,13 @@ class Gauge:
         """Lève OSError si la jauge ne répond pas."""
         return decode(self.register(SOC), self.register(VCELL), self.register(CRATE), self.register(MODE),
                       self.register(STATUS))
+
+    def wake(self) -> None:
+        """Sort la jauge de sa veille, une fois pour toutes. Relevé sur le Pi : elle y entre d'elle-même dès que la
+        tension bouge peu, et n'y mesure plus que toutes les 45 s — la tension, la vitesse de charge et donc
+        l'autonomie de l'écran restent figées jusqu'à trois quarts de minute. Seuils à zéro : elle mesure en continu,
+        pour quelques microampères de plus, invisibles à côté du Pi. Lève OSError si la jauge ne répond pas."""
+        self.bus.transfer(ADDRESS, bytes([HIBRT, 0x00, 0x00]))
 
 
 @dataclass(frozen=True)
@@ -158,6 +166,10 @@ class Monitor:
             bus = self._find()
             if bus is not None:
                 self._gauge, self._failed = Gauge(bus), 0
+                try:
+                    self._gauge.wake()  # sinon elle ne mesure que toutes les 45 s
+                except OSError:
+                    self.errors += 1
         reading = None
         if self._gauge is not None:
             try:

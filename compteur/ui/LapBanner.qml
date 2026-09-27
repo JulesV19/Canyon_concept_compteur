@@ -36,19 +36,19 @@ Panel {
 
     Text {
         x: 22
-        y: 16
+        y: 12
         text: banner.title
         color: Theme.ash
-        font { family: Theme.sans; pixelSize: 15; weight: Font.Medium }
+        font { family: Theme.sans; pixelSize: 24; weight: Font.DemiBold }
     }
 
     // Temps du tour, en grand
     Text {
         x: 22
-        anchors { baseline: parent.top; baselineOffset: 104 }
+        anchors { baseline: parent.top; baselineOffset: 102 }
         text: Format.duration(banner.lap.timerS)
         color: Theme.lacquer
-        font { family: Theme.numbers; pixelSize: 70; weight: Font.Bold; italic: true; features: ({ "tnum": 1 }) }
+        font { family: Theme.numbers; pixelSize: 76; weight: Font.Bold; italic: true; features: ({ "tnum": 1 }) }
     }
 
     Row {
@@ -58,34 +58,34 @@ Panel {
 
         Repeater {
             model: [
-                { label: "Distance", value: Format.number(banner.lap.distanceKm, 2), unit: "km" },
-                { label: "Moyenne", value: Format.number(banner.lap.avgSpeedKmh, 1), unit: "km/h" },
-                { label: "Cardio", value: Format.number(banner.lap.avgHeartRate), unit: "bpm" }
+                { label: "DISTANCE", value: Format.number(banner.lap.distanceKm, 2), unit: "km" },
+                { label: "MOYENNE", value: Format.number(banner.lap.avgSpeedKmh, 1), unit: "km/h" },
+                { label: "CARDIO", value: Format.number(banner.lap.avgHeartRate), unit: "bpm" }
             ]
 
             delegate: Item {
                 required property var modelData
                 width: parent.width / 3
-                height: 50
+                height: 58
 
                 Text {
                     text: modelData.label
                     color: Theme.ash
-                    font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
+                    font { family: Theme.numbers; pixelSize: 20; weight: Font.DemiBold; letterSpacing: 1.5 }
                 }
                 Text {
                     id: statValue
                     anchors { baseline: parent.bottom; baselineOffset: -6 }
                     text: modelData.value
                     color: Theme.lacquer
-                    font { family: Theme.numbers; pixelSize: 27; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+                    font { family: Theme.numbers; pixelSize: 36; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
                 }
                 Text {
                     x: statValue.implicitWidth + 5
                     anchors.baseline: statValue.baseline
                     text: modelData.unit
                     color: Theme.ash
-                    font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
+                    font { family: Theme.sans; pixelSize: 20; weight: Font.DemiBold }
                 }
             }
         }

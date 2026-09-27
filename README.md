@@ -1,6 +1,6 @@
 # Canyon compteur
 
-Compteur vélo autonome pour un Canyon Ultimate : Raspberry Pi Zero 2 W, écran tactile 2,8" 480×640 en portrait, interface Qt Quick (PySide6). Projet personnel en cours ; les capteurs sont encore simulés, sauf la jauge de batterie.
+Compteur vélo autonome pour un Canyon Ultimate : Raspberry Pi Zero 2 W, écran tactile 2,8" 480×640 en portrait, interface Qt Quick (PySide6). Projet personnel en cours : sur le Pi, le GPS et la jauge de batterie sont branchés et donnent les vraies mesures ; sur le Mac, tout est simulé (un cycliste qui suit un parcours GPX). Pas encore de ceinture cardio ni de baromètre.
 
 <img src="docs/intro.gif" alt="Intro" width="160"> <img src="docs/accueil.png" alt="Accueil" width="160"> <img src="docs/principale.png" alt="Page principale" width="160"> <img src="docs/carte.png" alt="Carte" width="160"> <img src="docs/altitude.png" alt="Altitude" width="160"> <img src="docs/cardio.png" alt="Cardio" width="160"> <img src="docs/tours.png" alt="Tours" width="160"> <img src="docs/resume.png" alt="Résumé" width="160"> <img src="docs/sorties.png" alt="Mes sorties" width="160">
 
@@ -14,6 +14,7 @@ Compteur vélo autonome pour un Canyon Ultimate : Raspberry Pi Zero 2 W, écran 
 - Reprise après coupure : la sortie en cours est écrite dans `sorties/reprise.jsonl` toutes les 30 s.
 - Réglages : FC max, auto-pause, luminosité (`~/.config/canyon-compteur/reglages.json`).
 - Batterie (depuis les Réglages), en direct pour les essais d'autonomie : charge, autonomie et prévision, tension, variation, courant estimé, alimentation 5 V et température du Pi. Sur le Pi, la jauge MAX17048 (lue toutes les 2 s par son propre fil, `compteur/battery.py`) ; sur le Mac, une batterie simulée. L'autonomie suit la pente de la charge sur les 15 dernières minutes, et le courant se déduit de la capacité (5000 mAh, `CAPACITY_MAH`) : la jauge ne le mesure pas.
+- GPS (depuis le menu ≡) : satellites utilisés et en vue, ciel, force du signal, précision, position, altitude et heure UTC. Sur le Pi, le PA1010D lu sur le bus I2C par son propre fil (`compteur/gps/`) ; la vitesse, la position, l'altitude et le cap de la sortie en viennent aussi, et l'accueil n'annonce « Prêt » que quand il capte vraiment. Sur le Mac, un GPS simulé suit le cycliste simulé.
 
 ## Lancer sur le Mac
 
@@ -67,10 +68,12 @@ tools/pi/envoyer.sh                                               # copie le pro
 ssh -4 julesvide@compteur.local compteur/tools/pi/installer.sh    # paquets, venv, réserve CMA, droit d'éteindre
 ssh -4 julesvide@compteur.local 'cd compteur && .venv/bin/python -m compteur --miroir'
 ssh -4 julesvide@compteur.local 'cd compteur && .venv/bin/python tools/pi/essai_capteurs.py'  # jauge et GPS (bus I2C)
+sudo systemctl edit compteur     # sur le Pi : --miroir pendant la mise au point (COMPTEUR_OPTIONS)
 ```
 
-- Plein écran sans bureau (`linuxfb` par DRM), **dessiné par le processeur** (`PI_QT_ENV` dans `compteur/app.py`). Le GPU est écarté : sur le Zero 2 W, son pilote (vc4) corrompt la mémoire, jusqu'à figer le Pi (noyaux 6.18.34 à 6.18.50).
-- Charge mesurée : carte ≈ 22 images/s pour ≈ 30 % d'un cœur ; autres pages ≤ 11 %.
+- Plein écran sans bureau (`linuxfb` par DRM), **dessiné par le processeur** (`PI_QT_ENV` dans `compteur/pi.py`). Le GPU est écarté : sur le Zero 2 W, son pilote (vc4) corrompt la mémoire, jusqu'à figer le Pi (noyaux 6.18.34 à 6.18.50).
+- L'appli démarre seule (`compteur.service`, posé par `installer.sh`) : elle n'attend pas le réseau, qui coûte 13 s et ne lui sert pas pour s'afficher. Allumage → écran : ≈ 29 s, dont 19 s de système. « Éteindre » arrête le système proprement, et SIGTERM laisse l'appli finir d'écrire la sortie en cours.
+- Charge mesurée (`--mesure`, carte complète de 1,5 Go) : carte ≈ 21 images/s pour ≈ 34 % d'un cœur ; intro 63 % ; autres pages ≤ 15 %, CarPlay 11 %. Hors de l'écran, la page CarPlay ajoute ≈ 4 ms à la mise à jour de chaque seconde (0,4 % d'un cœur), mesuré avec et sans elle le 27/09/2026. La mesure prend toujours le cycliste simulé, même sur le Pi : le vrai GPS y est immobile.
 
 Matériel prévu : [docs/materiel.md](docs/materiel.md).
 
@@ -78,9 +81,9 @@ Matériel prévu : [docs/materiel.md](docs/materiel.md).
 
 | Dossier | Contenu |
 |---|---|
-| `compteur/` | backend Python : moteur de calcul sans Qt (`ride.py`), parcours, modèles pour l'interface, FIT, historique, reprise, simulateur |
-| `compteur/ui/` | interface QML (`Main.qml` : navigation et raccourcis), polices Barlow, trame carbone |
-| `tests/` | pytest, dont l'appli entière hors écran (`tests/pilote.py`) |
+| `compteur/` | backend Python : moteur de calcul sans Qt (`ride.py`), parcours, FIT, historique, reprise, simulateur ; en paquets : `model/` (modèles pour l'interface), `gps/`, `strava/`, `segments/`, `iphone/` ; l'appli (`app.py`), avec le déroulé d'une sortie (`ride_flow.py`), les captures (`captures.py`) et ce qui est propre au Pi (`pi.py`) |
+| `compteur/ui/` | interface QML (`Main.qml` : les écrans ; `Shortcuts.qml` : le clavier ; `RideScreen.qml`, `MenuScreens.qml`), une page et ses encadrés par fichier (`GpsPage.qml`, `GpsSky.qml`…), polices Barlow, trame carbone |
+| `tests/` | pytest, dont l'appli entière hors écran (`tests/pilote.py`, essais `test_app_*.py`) ; aides partagées dans `strava_fake.py`, `nmea_samples.py` et `conftest.py` |
 | `tools/` | fabrication de la carte (Node + MapLibre), connexion à Strava, envoi et installation sur le Pi, trame carbone |
 | `parcours/` | parcours GPX de démo |
 | `cartes/`, `sorties/` | carte générée et sorties enregistrées (non versionnées) |
@@ -95,8 +98,8 @@ Matériel prévu : [docs/materiel.md](docs/materiel.md).
 
 ## Reste à faire
 
-- Vrais capteurs : GPS (et son heure : le Pi n'a pas d'horloge sans réseau), ceinture cardio BLE, baromètre.
-- Écran DPI tactile, boutons, démarrage automatique, Wi-Fi coupé pendant la sortie.
+- Heure prise au GPS : le Pi n'a pas d'horloge sans réseau. Ceinture cardio BLE et baromètre.
+- Écran DPI tactile, boutons, Wi-Fi coupé pendant la sortie.
 - Retour guidé vers le parcours ; envoi automatique des sorties.
 - Boîtier, montage et essais sur le vélo.
 

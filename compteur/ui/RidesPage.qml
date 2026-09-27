@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Shapes
 import "Format.js" as Format
 
 // Mes sorties : les sorties enregistrées, de la plus récente à la plus ancienne. Un toucher rouvre leur résumé.
@@ -22,6 +21,13 @@ Item {
         keyboard = true
         focusRow = Math.max(0, Math.min(rides.length - 1, focusRow + delta))
         list.positionViewAtIndex(focusRow, ListView.Contain)
+        snapRows()
+    }
+    // Le défilement se cale sur les lignes (snapMode), mais positionViewAtIndex, lui, ne s'en occupe pas : au clavier,
+    // on recale sur la ligne, sans jamais dépasser la fin de la liste.
+    function snapRows() {
+        const last = list.contentHeight + list.bottomMargin - list.height
+        list.contentY = Math.max(0, Math.min(Math.ceil(list.contentY / list.rowHeight) * list.rowHeight, last))
     }
     function activate() {
         if (rides.length > 0)
@@ -60,7 +66,7 @@ Item {
         visible: page.rides.length > 0
         text: Format.number(page.totalKm) + " km"
         color: Theme.ash
-        font { family: Theme.sans; pixelSize: 16; weight: Font.Medium }
+        font { family: Theme.sans; pixelSize: 22; weight: Font.DemiBold }
     }
 
     Panel {
@@ -72,9 +78,16 @@ Item {
 
         ListView {
             id: list
+            readonly property real rowHeight: 96
             anchors { fill: parent; topMargin: 2; bottomMargin: 2 }
             clip: true
             boundsBehavior: Flickable.StopAtBounds
+            // Le cadre ne fait pas un nombre entier de lignes : sans rien, une ligne reste à cheval sur un bord et le
+            // rognage tranche le nom en plein milieu. La liste se cale donc sur les lignes, et ce qui dépasse devient
+            // une marge sous la dernière : arrivé au bas de la liste, le haut tombe encore juste. Reste, voulue, la
+            // lisière de la ligne suivante en bas du cadre : elle dit qu'il y en a d'autres.
+            snapMode: ListView.SnapToItem
+            bottomMargin: height % rowHeight  // marge du contenu, pas celle des ancres ci-dessus
             model: page.rides
 
             delegate: Item {
@@ -87,8 +100,11 @@ Item {
                     return 1 - Math.pow(1 - x, 3)
                 }
                 width: list.width
-                height: 84
+                height: list.rowHeight
                 opacity: entry
+                // Chaque ligne dans son propre calque : sinon, arrivée en haut du cadre, son dessin déborde
+                // sur le titre et y reste (voir Panel.scrolled).
+                layer.enabled: true
                 transform: Translate { x: (1 - row.entry) * 12 * Theme.lean; y: (1 - row.entry) * 12 }
 
                 Rectangle {
@@ -106,30 +122,30 @@ Item {
 
                 Outline {
                     x: 20
-                    y: 16
-                    width: 52
-                    height: 52
+                    y: 20
+                    width: 56
+                    height: 56
                     points: row.modelData.outline
                 }
                 Text {
                     id: rideName
-                    x: 88
-                    y: 17
+                    x: 92
+                    y: 16
                     width: rideKm.x - x - 12
                     text: row.modelData.name
                     elide: Text.ElideRight
                     color: Theme.lacquer
-                    font { family: Theme.sans; pixelSize: 19; weight: Font.DemiBold }
+                    font { family: Theme.sans; pixelSize: 25; weight: Font.DemiBold }
                 }
                 Text {
                     id: rideDate
-                    x: 88
-                    anchors { top: rideName.bottom; topMargin: 3 }
+                    x: 92
+                    anchors { top: rideName.bottom; topMargin: 2 }
                     width: rideTime.x - x - 12
                     text: row.modelData.dateText
                     elide: Text.ElideRight
                     color: Theme.ash
-                    font { family: Theme.sans; pixelSize: 14; weight: Font.Medium }
+                    font { family: Theme.sans; pixelSize: 19; weight: Font.DemiBold }
                 }
 
                 // Distance et temps, à droite
@@ -138,21 +154,21 @@ Item {
                     anchors { right: kmUnit.left; rightMargin: 4; baseline: rideName.baseline }
                     text: Format.number(row.modelData.distanceKm, 1)
                     color: Theme.lacquer
-                    font { family: Theme.numbers; pixelSize: 24; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+                    font { family: Theme.numbers; pixelSize: 32; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
                 }
                 Text {
                     id: kmUnit
                     anchors { right: parent.right; rightMargin: 22; baseline: rideName.baseline }
                     text: "km"
                     color: Theme.ash
-                    font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
+                    font { family: Theme.sans; pixelSize: 19; weight: Font.DemiBold }
                 }
                 Text {
                     id: rideTime
                     anchors { right: parent.right; rightMargin: 22; baseline: rideDate.baseline }
                     text: Format.duration(row.modelData.timerS)
                     color: Theme.ash
-                    font { family: Theme.numbers; pixelSize: 17; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+                    font { family: Theme.numbers; pixelSize: 23; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
                 }
 
                 Rectangle {
@@ -177,7 +193,7 @@ Item {
             wrapMode: Text.WordWrap
             text: "Aucune sortie enregistrée.\nÀ la fin d'une sortie, Enregistrer la range ici."
             color: Theme.ash
-            font { family: Theme.sans; pixelSize: 16; weight: Font.Medium }
+            font { family: Theme.sans; pixelSize: 22; weight: Font.DemiBold }
         }
     }
 }

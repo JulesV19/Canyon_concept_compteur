@@ -16,7 +16,9 @@ from pathlib import Path
 from PySide6.QtCore import QEventLoop, QMetaObject, QObject, QPoint, Qt, QTimer
 from PySide6.QtTest import QTest
 import compteur.app as app
-from compteur.app import PAGES, Compteur
+import compteur.pi as pi
+from compteur.app import Compteur
+from compteur.captures import PAGES
 
 def open_app(**options):
     """L'appli, sortie protégée par le fichier de reprise, dans le dossier des sorties de l'essai. Le temps avance à la

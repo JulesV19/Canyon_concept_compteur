@@ -7,6 +7,18 @@ Vue d'ensemble et commandes : README.md.
 - Tout en français : interface, commentaires, docs. Identifiants du code en anglais.
 - Python du projet : `.venv/bin/python`. Tests : `.venv/bin/python -m pytest -q` (≈ 35 s sur le Mac).
 - `compteur/ride.py` ne dépend ni de Qt ni du matériel : le garder ainsi.
+- Petits fichiers clairs : un fichier, un sujet, qu'on lit d'une traite. Viser moins de 300 lignes ; au-delà, découper
+  en modules (un paquet Python avec un `__init__.py` qui réexporte, ou des composants QML) avant d'ajouter du code.
+  Chaque découpage se fait seul, sans changer le comportement, et la suite de tests passe avant et après ; pour le
+  QML, captures d'avant et d'après comparées au pixel. Exemples : `compteur/iphone/`, `compteur/strava/`,
+  `GpsPage.qml` (un fichier par encadré : `GpsHero`, `GpsSky`…), `tests/test_app_*.py`.
+- QML :
+  - un nouveau type va dans `compteur/ui/qmldir` ;
+  - réutiliser les petits composants partagés avant d'en écrire un : `Hairline` (filet), `SlantRule` (filet penché),
+    `FigureLine` (valeur et unité), `LabeledFigure`, `RowLabel`, `RowHint`, `StepButton`, `SlantToggle`, `SlantSlider` ;
+  - un encadré sorti d'une page reçoit la page par `required property var view` (écrire `page: page` ferait
+    pointer la propriété sur elle-même) ; sa position qui dépend d'un voisin (`y: hero.y + …`) reste dans la page ;
+  - jamais `id: layer` : dans un élément enfant, `layer` désigne sa propriété `Item.layer`.
 
 ## Produit
 
@@ -36,17 +48,16 @@ Strava : jetons, segments et records battus avec le compteur dans `~/.config/can
 ## Raspberry Pi
 
 - Accès : `ssh -4 julesvide@compteur.local` (l'IPv6 du Pi décroche), par clé, sudo sans mot de passe. Envoi : `tools/pi/envoyer.sh`.
-- Rendu par le processeur, boucle simple sur un fil (`PI_QT_ENV` dans `compteur/app.py`). Écartés :
+- Rendu par le processeur, boucle simple sur un fil (`PI_QT_ENV` dans `compteur/pi.py`). Écartés :
   - le GPU : le pilote vc4 corrompt la mémoire (segfaults, Oops du noyau, Pi figé) avec les noyaux 6.18.34, 6.18.39 et 6.18.50, ce dernier ayant les correctifs vc4 d'août 2026 ; la RAM et l'alimentation sont hors de cause ;
   - `QSG_RENDER_LOOP=threaded` : deux fois moins d'images pour le même processeur.
 - Noyau : 6.18.39+rpt-rpi-v8 des paquets. Pour le réinstaller : `linux-image-6.18.39+rpt-rpi-v8` et `raspi-firmware` (le méta-paquet ne recopie rien).
 - Capture en linuxfb DRM : seul `QQuickWindow.grabWindow()` marche, et il redessine toute la fenêtre ; d'où le miroir qui espace ses captures.
+- Heure : ni RTC ni réseau à vélo ; l'appli met l'horloge du système à l'heure du GPS dès sa première position (`Compteur.sync_clock`, droit `CAP_SYS_TIME` du service).
 - Mesurer : `--mesure`. D'une série à l'autre, le processeur varie de 15 points parce que le nombre d'images varie : comparer le coût par image (% d'un cœur ÷ images/s).
 - Retirés, dans le commit 94ee672 : `tools/pi/qt_gbm.py` (ajoute `libQt6EglFsKmsGbmSupport`, absente des roues PySide6, pour un essai au GPU) et `docs/fiabilite.md` (revue de fiabilité du 13/09/2026, avec toutes ses mesures).
 
 ## Points ouverts
 
-- Heure sans réseau : ni RTC ni fake-hwclock, la prendre au GPS.
 - Carte plus chère en virage : chaque pas de rotation refait son image.
 - Miroir plus lent depuis l'image en cache de la carte (cause inconnue, priorité basse).
-- Démarrage automatique : lancer `python -m compteur` (reprise active), et laisser SIGTERM fermer l'appli.

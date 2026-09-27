@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Shapes
 import "Format.js" as Format
 
 // Accueil : le logo (où l'intro se pose), les parcours à balayer, l'état des capteurs, le menu et le départ.
@@ -84,16 +83,16 @@ Item {
         text: "Ultimate CF SL 7"
         color: Theme.ash
         opacity: home.enter(0, 0.3)
-        font { family: Theme.sans; pixelSize: 15; weight: Font.DemiBold; italic: true; letterSpacing: 1.5 }
+        font { family: Theme.sans; pixelSize: 18; weight: Font.DemiBold; italic: true; letterSpacing: 1.5 }
     }
 
     // Parcours à balayer, puis la sortie libre. Les éléments arrivent en glissant dans l'oblique du logo.
     ListView {
         id: carousel
         readonly property real entry: home.enter(0.05, 0.45)
-        y: 102
+        y: 96
         width: parent.width
-        height: 290
+        height: 284
         opacity: entry
         transform: Translate { x: (1 - carousel.entry) * 18 * Theme.lean; y: (1 - carousel.entry) * 18 }
 
@@ -162,13 +161,13 @@ Item {
         id: sensors
         readonly property real entry: home.enter(0.4, 0.8)
         x: 16
-        y: 424
+        y: 420
         width: parent.width - 32
-        height: 58
+        height: 68
         opacity: entry
         transform: Translate { x: (1 - sensors.entry) * 14 * Theme.lean; y: (1 - sensors.entry) * 14 }
 
-        Sensor {
+        HomeSensor {
             x: 8
             width: parent.width / 2 - 8
             height: parent.height
@@ -179,20 +178,12 @@ Item {
         }
 
         // Filet penché comme le logo
-        Shape {
+        SlantRule {
             x: parent.width / 2
             height: parent.height
-            preferredRendererType: Shape.CurveRenderer
-            ShapePath {
-                strokeColor: Theme.hairline
-                strokeWidth: 1
-                fillColor: "transparent"
-                startX: -Theme.lean * sensors.height / 2; startY: 0
-                PathLine { x: Theme.lean * sensors.height / 2; y: sensors.height }
-            }
         }
 
-        Sensor {
+        HomeSensor {
             x: parent.width / 2 + 28
             width: parent.width / 2 - 28
             height: parent.height
@@ -205,178 +196,20 @@ Item {
         }
     }
 
-    // Menu (Mes sorties, Réglages, Éteindre) : trois traits taillés et étagés dans l'oblique du logo,
-    // qui se resserrent sous le doigt
-    Panel {
+    MenuButton {
         id: menuButton
-        readonly property real entry: home.enter(0.6, 1)
+        entry: home.enter(0.6, 1)
         x: 16
-        width: 68
-        height: 68
         y: parent.height - height - 18
-        color: menuTap.pressed ? Theme.ash : Theme.carbonRaised
-        woven: false
-        opacity: entry
-        transform: Translate { x: (1 - menuButton.entry) * 14 * Theme.lean; y: (1 - menuButton.entry) * 14 }
-
-        Item {
-            id: glyph
-            anchors.centerIn: parent
-            width: 34
-            height: 26
-            property real spread: menuTap.pressed ? 6.5 : 9  // écart entre deux traits
-            Behavior on spread { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-
-            Repeater {
-                model: 3
-                delegate: Shape {
-                    id: bar
-                    required property int index
-                    readonly property real rise: (1 - index) * glyph.spread  // hauteur au-dessus du trait du milieu
-                    width: 22
-                    height: 4
-                    x: (glyph.width - width) / 2 - rise * Theme.lean
-                    y: (glyph.height - height) / 2 - rise
-                    preferredRendererType: Shape.CurveRenderer
-                    ShapePath {
-                        fillColor: menuTap.pressed ? Theme.graphite : Theme.lacquer
-                        strokeColor: "transparent"
-                        startX: 0; startY: 0
-                        PathLine { x: bar.width - Theme.lean * bar.height; y: 0 }
-                        PathLine { x: bar.width; y: bar.height }
-                        PathLine { x: Theme.lean * bar.height; y: bar.height }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-            }
-        }
-
-        TapHandler {
-            id: menuTap
-            onTapped: home.menuRequested()
-        }
+        onTapped: home.menuRequested()
     }
 
-    Panel {
-        id: startButton
-        readonly property real entry: home.enter(0.6, 1)
+    StartButton {
+        entry: home.enter(0.6, 1)
         x: menuButton.x + menuButton.width + 10
         width: parent.width - x - 16
-        height: 68
         y: parent.height - height - 18
-        color: tap.pressed ? Qt.darker(Theme.lacquer, 1.15) : Theme.lacquer
-        woven: false
-        outline: "transparent"
-        opacity: entry
-        scale: tap.pressed ? 0.97 : 1
-        Behavior on scale { NumberAnimation { duration: 120 } }
-        transform: Translate { x: (1 - startButton.entry) * 14 * Theme.lean; y: (1 - startButton.entry) * 14 }
-
-        Row {
-            anchors.centerIn: parent
-            spacing: 14
-
-            Item {
-                width: 20
-                height: 20
-                anchors.verticalCenter: parent.verticalCenter
-
-                // Triangle « lecture »
-                Shape {
-                    x: 2
-                    width: 17
-                    height: 20
-                    visible: !home.armed
-                    preferredRendererType: Shape.CurveRenderer
-                    ShapePath {
-                        fillColor: Theme.graphite
-                        strokeColor: "transparent"
-                        startX: 0; startY: 0
-                        PathLine { x: 17; y: 10 }
-                        PathLine { x: 0; y: 20 }
-                        PathLine { x: 0; y: 0 }
-                    }
-                }
-                // Anneau d'attente du signal GPS
-                Shape {
-                    anchors.fill: parent
-                    visible: home.armed
-                    preferredRendererType: Shape.CurveRenderer
-                    RotationAnimation on rotation {
-                        running: home.armed
-                        from: 0
-                        to: 360
-                        duration: 900
-                        loops: Animation.Infinite
-                    }
-                    ShapePath {
-                        strokeColor: Theme.graphite
-                        strokeWidth: 3
-                        fillColor: "transparent"
-                        capStyle: ShapePath.RoundCap
-                        PathAngleArc { centerX: 10; centerY: 10; radiusX: 8; radiusY: 8; startAngle: 0; sweepAngle: 270 }
-                    }
-                }
-            }
-            Text {
-                text: home.armed ? "Départ au signal GPS" : "Démarrer"
-                color: Theme.graphite
-                font { family: Theme.sans; pixelSize: 24; weight: Font.DemiBold }
-            }
-        }
-
-        TapHandler {
-            id: tap
-            onTapped: home.requestStart()
-        }
-    }
-
-    // État d'un capteur : nom, pastille (verte : prêt ; ambre qui clignote : pas encore) et valeur
-    component Sensor: Item {
-        id: sensor
-        property string label
-        property string value
-        property string unit
-        property bool ready
-        property bool numeric: false
-        property int beat  // numéro de la mise à jour : la pastille ambre clignote au rythme des secondes
-
-        Text {
-            text: sensor.label
-            color: Theme.ash
-            font { family: Theme.sans; pixelSize: 14; weight: Font.Medium }
-        }
-        Row {
-            anchors.bottom: parent.bottom
-            spacing: 8
-
-            Rectangle {
-                id: dot
-                anchors.verticalCenter: valueText.verticalCenter
-                width: 8
-                height: 8
-                radius: 4
-                color: sensor.ready ? Theme.ok : Theme.warning
-                opacity: !sensor.ready && sensor.beat % 2 === 1 ? 0.25 : 1
-            }
-            Text {
-                id: valueText
-                text: sensor.value
-                color: Theme.lacquer
-                font {
-                    family: sensor.numeric ? Theme.numbers : Theme.sans
-                    pixelSize: sensor.numeric ? 28 : 20
-                    weight: Font.DemiBold
-                    italic: sensor.numeric
-                    features: ({ "tnum": 1 })
-                }
-            }
-            Text {
-                anchors.baseline: valueText.baseline
-                text: sensor.unit
-                color: Theme.ash
-                font { family: Theme.sans; pixelSize: 15; weight: Font.Medium }
-            }
-        }
+        armed: home.armed
+        onTapped: home.requestStart()
     }
 }

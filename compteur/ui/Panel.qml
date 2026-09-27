@@ -10,7 +10,14 @@ Item {
     property color outline: Theme.hairline
     property bool woven: true              // trame carbone
     property real cut: 22                  // hauteur de la coupe ; sa largeur suit la pente du logo
+    property bool scrolled: false          // le panneau est dans un cadre qui défile : voir le calque ci-dessous
     readonly property real cutX: cut * Theme.lean
+
+    // Le rendu du Pi (logiciel) ne rogne pas les Shape au bord d'un cadre qui défile : le panneau se dessine par-dessus
+    // la barre d'état, et comme il est hors du cadre, la zone n'est jamais réeffacée : le dessin reste à l'écran après
+    // avoir quitté la page. Dans son propre calque, il reste dans le cadre. Coût : une image hors écran, refaite
+    // seulement quand le panneau change, pas quand il défile ; à ne poser que là où c'est nécessaire.
+    layer.enabled: scrolled
 
     Rectangle {
         anchors.fill: parent

@@ -13,3 +13,6 @@ cartes/*.tmp
 # Sorties enregistrées
 sorties/
 CLAUDE.md
+
+# Police et icônes d'Apple pour la page CarPlay : leur licence interdit de les distribuer (tools/carplay/ressources.py)
+compteur/ui/carplay/apple/

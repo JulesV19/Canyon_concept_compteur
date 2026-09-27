@@ -96,7 +96,7 @@ Item {
         anchors { top: parent.top; topMargin: 14; horizontalCenter: parent.horizontalCenter }
         visible: page.offRoute
         width: offRouteText.implicitWidth + 2 * slant + 16
-        height: 32
+        height: 42
         readonly property real slant: Theme.lean * height
 
         Shape {
@@ -115,9 +115,9 @@ Item {
         Text {
             id: offRouteText
             anchors.centerIn: parent
-            text: "Hors parcours"
+            text: "HORS PARCOURS"
             color: Theme.graphite
-            font { family: Theme.sans; pixelSize: 16; weight: Font.DemiBold }
+            font { family: Theme.numbers; pixelSize: 24; weight: Font.DemiBold; letterSpacing: 1.5 }
         }
     }
 
@@ -134,7 +134,7 @@ Item {
     Rectangle {
         id: sheet
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: 150
+        height: 172
         color: Theme.carbon
 
         Image {
@@ -157,7 +157,7 @@ Item {
 
         Metric {
             x: 24
-            label: "Vitesse"
+            label: "VITESSE"
             value: Format.number(page.values.speedKmh, 1)
             unit: "km/h"
         }
@@ -180,7 +180,7 @@ Item {
 
         Metric {
             x: parent.width / 2 + Theme.lean * divider.height / 2 + 14
-            label: page.hasRoute ? (page.offRoute ? "Hors parcours" : "Restant") : "Distance"
+            label: page.hasRoute ? (page.offRoute ? "HORS PARCOURS" : "RESTANT") : "DISTANCE"
             labelColor: page.offRoute ? Theme.warning : Theme.ash
             value: Format.number(page.hasRoute ? page.values.routeRemainingKm : page.values.distanceKm, 1)
             unit: "km"
@@ -200,21 +200,21 @@ Item {
             y: 20
             text: metric.label
             color: metric.labelColor
-            font { family: Theme.sans; pixelSize: 15; weight: Font.Medium }
+            font { family: Theme.numbers; pixelSize: 26; weight: Font.DemiBold; letterSpacing: 1.5 }
         }
         Text {
             id: metricValue
             anchors { baseline: parent.bottom; baselineOffset: -26 }
             text: metric.value
             color: Theme.lacquer
-            font { family: Theme.numbers; pixelSize: 66; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+            font { family: Theme.numbers; pixelSize: 78; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
         }
         Text {
             x: metricValue.implicitWidth + 8
             anchors.baseline: metricValue.baseline
             text: metric.unit
             color: Theme.ash
-            font { family: Theme.sans; pixelSize: 17; weight: Font.Medium }
+            font { family: Theme.sans; pixelSize: 24; weight: Font.DemiBold }
         }
     }
 

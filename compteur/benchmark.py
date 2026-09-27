@@ -1,7 +1,7 @@
 """Mesure de la fluidité et de la charge, pour le Pi : python -m compteur --mesure
 
-Un scénario d'environ 3 minutes passe par l'intro, l'accueil, chaque page d'une sortie sur parcours, la pause, le
-résumé, puis la carte d'une sortie libre. Pour chaque phase : images affichées par seconde, processeur (fil de
+Un scénario d'environ 3 minutes passe par l'intro, l'accueil, chaque page d'une sortie sur parcours (CarPlay compris,
+avec un iPhone simulé), la pause, le résumé, puis la carte d'une sortie libre. Pour chaque phase : images affichées par seconde, processeur (fil de
 l'interface, fil de rendu), durée de la mise à jour de chaque seconde, mémoire et, sur le Pi, température.
 Rien n'est écrit ni effacé dans sorties/ : la mesure travaille dans un dossier temporaire (voir __main__).
 """
@@ -19,7 +19,10 @@ from pathlib import Path
 
 from PySide6.QtCore import QMetaObject, QObject, QTimer, Slot, qVersion
 
-from .app import PAGES, PI_MODEL_FILE
+from .captures import PAGES
+from .pi import PI_MODEL_FILE
+from .iphone import PhoneState
+from .sim import SimulatedPhone
 
 SETTLE_S = 3  # après chaque changement d'écran (transitions, tuiles) : hors mesure
 PHASE_S = 15  # durée mesurée de chaque phase
@@ -148,12 +151,21 @@ class Benchmark(QObject):
             ("Altitude", page("altitude"), phase_s, settle_s),
             ("Cardio", page("cardio"), phase_s, settle_s),
             ("Tours", page("tours"), phase_s, settle_s),
+            ("CarPlay", page("carplay-sortie"), phase_s, settle_s),
             ("Pause", self._pause, phase_s, settle_s),
             ("Résumé", self._summary, phase_s, settle_s),
             ("Carte, sortie libre", self._free_ride, phase_s, settle_s),
         ] if duration > 0]
 
     def run(self) -> dict:
+        # Toujours le cycliste simulé, même sur le Pi : le vrai GPS y est posé sur la table, la sortie n'avancerait
+        # pas (carte immobile) et son bruit ferait redessiner la carte au hasard, d'une série à l'autre.
+        self.c.gps = None
+        self.c.rider = self.c.make_rider()
+        # De même, l'iPhone simulé : le vrai n'est pas toujours là, et sa musique ou ses messages changeraient la charge
+        phone = PhoneState()
+        self.c.phone_sim = SimulatedPhone(phone)
+        self.c.phone.phone, self.c.phone.link = phone, self.c.phone_sim
         # Les mises à jour de chaque seconde passent par ici pour être chronométrées
         self.c.timer.stop()
         self.timer = QTimer(self)

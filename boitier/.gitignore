@@ -1,0 +1,4 @@
+.venv/
+modeles/brut/
+sortie/
+__pycache__/

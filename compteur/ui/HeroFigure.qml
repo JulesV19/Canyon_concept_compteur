@@ -10,20 +10,20 @@ Item {
     readonly property real valueEnd: unitText.x + unitText.implicitWidth
     readonly property real valueBaseline: valueText.y + valueText.baselineOffset
     width: valueEnd
-    height: 120
+    height: 140
 
     Text {
         y: 8
         text: figure.label
         color: figure.labelColor
-        font { family: Theme.sans; pixelSize: 15; weight: Font.Medium }
+        font { family: Theme.numbers; pixelSize: 26; weight: Font.DemiBold; letterSpacing: 1.5 }
     }
     Text {
         id: valueText
-        anchors { baseline: parent.top; baselineOffset: 102 }
+        anchors { baseline: parent.top; baselineOffset: 124 }
         text: figure.value
         color: Theme.lacquer
-        font { family: Theme.numbers; pixelSize: 84; weight: Font.Bold; italic: true; features: ({ "tnum": 1 }) }
+        font { family: Theme.numbers; pixelSize: 92; weight: Font.Bold; italic: true; features: ({ "tnum": 1 }) }
     }
     Text {
         id: unitText
@@ -31,6 +31,6 @@ Item {
         anchors.baseline: valueText.baseline
         text: figure.unit
         color: Theme.ash
-        font { family: Theme.sans; pixelSize: 18; weight: Font.DemiBold }
+        font { family: Theme.sans; pixelSize: 26; weight: Font.DemiBold }
     }
 }

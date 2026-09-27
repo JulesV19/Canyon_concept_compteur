@@ -59,7 +59,7 @@ Panel {
         text: card.name
         elide: Text.ElideRight
         color: Theme.lacquer
-        font { family: Theme.sans; pixelSize: 22; weight: Font.DemiBold }
+        font { family: Theme.sans; pixelSize: 28; weight: Font.DemiBold }
     }
 
     // Le tracé se dessine depuis le départ
@@ -124,13 +124,13 @@ Panel {
             id: distance
             text: Format.number(card.distanceKm, 1)
             color: Theme.lacquer
-            font { family: Theme.numbers; pixelSize: 36; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+            font { family: Theme.numbers; pixelSize: 46; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
         }
         Text {
             anchors.baseline: distance.baseline
             text: "km"
             color: Theme.ash
-            font { family: Theme.sans; pixelSize: 16; weight: Font.Medium }
+            font { family: Theme.sans; pixelSize: 22; weight: Font.DemiBold }
         }
     }
     Row {
@@ -140,13 +140,13 @@ Panel {
             id: ascent
             text: Format.number(card.ascentM)
             color: Theme.lacquer
-            font { family: Theme.numbers; pixelSize: 36; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+            font { family: Theme.numbers; pixelSize: 46; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
         }
         Text {
             anchors.baseline: ascent.baseline
             text: "m D+"
             color: Theme.ash
-            font { family: Theme.sans; pixelSize: 16; weight: Font.Medium }
+            font { family: Theme.sans; pixelSize: 22; weight: Font.DemiBold }
         }
     }
 }

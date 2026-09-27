@@ -34,38 +34,38 @@ Panel {
     StravaMark {
         id: mark
         x: 22
-        y: 15
-        width: 18
+        y: 14
+        width: 22
     }
     Text {
         id: title
-        x: 48
-        y: 14
-        text: "Segment dans"
+        x: 52
+        y: 12
+        text: "SEGMENT DANS"
         color: Theme.ash
-        font { family: Theme.sans; pixelSize: 15; weight: Font.Medium }
+        font { family: Theme.numbers; pixelSize: 22; weight: Font.DemiBold; letterSpacing: 1.5 }
     }
     Text {
         x: title.x + title.implicitWidth + 6
         anchors.baseline: title.baseline
         text: Format.number(Math.round((banner.card.distanceM ?? 0) / 10) * 10) + " m"
         color: Theme.lacquer
-        font { family: Theme.numbers; pixelSize: 20; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+        font { family: Theme.numbers; pixelSize: 30; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
     }
     Text {
         x: 22
-        y: 42
+        y: 44
         width: parent.width - 44
         elide: Text.ElideRight
         text: banner.card.name ?? ""
         color: Theme.lacquer
-        font { family: Theme.sans; pixelSize: 28; weight: Font.DemiBold }
+        font { family: Theme.sans; pixelSize: 32; weight: Font.DemiBold }
     }
     SegmentProfile {
         x: 22
-        y: 88
+        y: 90
         width: parent.width - 44
-        height: 26
+        height: 22
         points: banner.profile
         axis: false
         showPosition: false
@@ -79,34 +79,34 @@ Panel {
 
         Repeater {
             model: [
-                { label: "Distance", value: Format.number(banner.card.lengthKm, 1), unit: "km" },
-                { label: "Pente moy.", value: Format.number(banner.card.gradePct, 1), unit: "%" },
-                { label: "Record", value: Format.clock(banner.card.prS), unit: "" }
+                { label: "DISTANCE", value: Format.number(banner.card.lengthKm, 1), unit: "km" },
+                { label: "PENTE MOY.", value: Format.number(banner.card.gradePct, 1), unit: "%" },
+                { label: "RECORD", value: Format.clock(banner.card.prS), unit: "" }
             ]
 
             delegate: Item {
                 required property var modelData
                 width: parent.width / 3
-                height: 50
+                height: 58
 
                 Text {
                     text: modelData.label
                     color: Theme.ash
-                    font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
+                    font { family: Theme.numbers; pixelSize: 20; weight: Font.DemiBold; letterSpacing: 1.5 }
                 }
                 Text {
                     id: statValue
                     anchors { baseline: parent.bottom; baselineOffset: -6 }
                     text: modelData.value
                     color: Theme.lacquer
-                    font { family: Theme.numbers; pixelSize: 27; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
+                    font { family: Theme.numbers; pixelSize: 36; weight: Font.DemiBold; italic: true; features: ({ "tnum": 1 }) }
                 }
                 Text {
                     x: statValue.implicitWidth + 5
                     anchors.baseline: statValue.baseline
                     text: modelData.unit
                     color: Theme.ash
-                    font { family: Theme.sans; pixelSize: 13; weight: Font.Medium }
+                    font { family: Theme.sans; pixelSize: 20; weight: Font.DemiBold }
                 }
             }
         }
